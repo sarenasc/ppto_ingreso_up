@@ -39,6 +39,7 @@ def load_config() -> dict:
 
         # ── Flask ────────────────────────────────────────────────────
         'FLASK_PORT':      int(os.getenv('FLASK_PORT',  '5050')),
+        'APP_SECRET_KEY':   os.getenv('APP_SECRET_KEY',  ''),
 
         # ── Rutas ───────────────────────────────────────────────────
         'UPLOAD_FOLDER':   str(UPLOADS),

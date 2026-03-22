@@ -302,3 +302,56 @@ def init_db(engine: str, schema: str) -> None:
                 warnings.warn(f"DDL skipped: {e}")
 
     print(f"[OK] Tablas verificadas/creadas — motor: {engine}, schema: {schema}")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# DDL para tabla de usuarios — se agrega a cada motor
+# ─────────────────────────────────────────────────────────────────────
+
+def _usuarios_sqlserver(s: str) -> list[str]:
+    return [f"""
+        IF NOT EXISTS (SELECT * FROM sys.tables
+                       WHERE name='ppto_usuarios' AND schema_id=SCHEMA_ID('{s}'))
+        CREATE TABLE {s}.ppto_usuarios (
+            id            INT IDENTITY(1,1) PRIMARY KEY,
+            username      NVARCHAR(50)  NOT NULL UNIQUE,
+            password_hash NVARCHAR(256) NOT NULL,
+            activo        INT           NOT NULL DEFAULT 1,
+            creado_en     DATETIME2     NOT NULL DEFAULT GETDATE()
+        )"""]
+
+
+def _usuarios_postgresql(s: str) -> list[str]:
+    return [f"""
+        CREATE TABLE IF NOT EXISTS {s}.ppto_usuarios (
+            id            SERIAL        PRIMARY KEY,
+            username      VARCHAR(50)   NOT NULL UNIQUE,
+            password_hash VARCHAR(256)  NOT NULL,
+            activo        INT           NOT NULL DEFAULT 1,
+            creado_en     TIMESTAMP     NOT NULL DEFAULT NOW()
+        )"""]
+
+
+def _usuarios_mysql(s: str) -> list[str]:
+    return [f"""
+        CREATE TABLE IF NOT EXISTS {s}.ppto_usuarios (
+            id            INT AUTO_INCREMENT PRIMARY KEY,
+            username      VARCHAR(50)  NOT NULL UNIQUE,
+            password_hash VARCHAR(256) NOT NULL,
+            activo        INT          NOT NULL DEFAULT 1,
+            creado_en     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"""]
+
+
+# Inyectar en los builders existentes
+_original_builders = dict(_DDL_BUILDERS)
+
+def _wrap(engine_key, usuario_fn):
+    original = _original_builders[engine_key]
+    def builder(s):
+        return original(s) + usuario_fn(s)
+    return builder
+
+_DDL_BUILDERS['sqlserver']  = _wrap('sqlserver',  _usuarios_sqlserver)
+_DDL_BUILDERS['postgresql'] = _wrap('postgresql', _usuarios_postgresql)
+_DDL_BUILDERS['mysql']      = _wrap('mysql',      _usuarios_mysql)

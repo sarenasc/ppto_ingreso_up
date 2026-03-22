@@ -16,9 +16,12 @@ from config          import CFG
 from database        import get_db
 from services.calculos import next_version
 
+from routes.auth import login_required
+
 bp = Blueprint('estimacion', __name__, url_prefix='/api/estimacion')
 
 
+@login_required
 @bp.route('/upload', methods=['POST'])
 def upload():
     file        = request.files.get('file')
@@ -103,6 +106,7 @@ def upload():
         return jsonify({'error': str(exc), 'trace': traceback.format_exc()}), 500
 
 
+@login_required
 @bp.route('/versions')
 def versions():
     schema = CFG['DB_SCHEMA']
@@ -124,6 +128,7 @@ def versions():
     return jsonify(rows)
 
 
+@login_required
 @bp.route('/pivot')
 def pivot():
     schema = CFG['DB_SCHEMA']
@@ -141,6 +146,7 @@ def pivot():
     return jsonify(rows)
 
 
+@login_required
 @bp.route('/download-ultimo')
 def download_ultimo():
     import os

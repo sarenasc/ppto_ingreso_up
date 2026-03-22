@@ -13,9 +13,12 @@ from services.calculos  import load_calc_data, calcular_fila, MESES_NOMBRE
 from services.exportar  import build_excel
 from database           import get_db
 
+from routes.auth import login_required
+
 bp = Blueprint('presupuesto', __name__, url_prefix='/api/ppto')
 
 
+@login_required
 @bp.route('/resumen')
 def resumen():
     agrupar = request.args.get('agrupar', 'mes')
@@ -60,6 +63,7 @@ def resumen():
     return jsonify(list(resultado.values()))
 
 
+@login_required
 @bp.route('/exportar')
 def exportar():
     moneda = (request.args.get('moneda') or 'CLP').strip().upper()

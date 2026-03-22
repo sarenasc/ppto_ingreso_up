@@ -9,11 +9,13 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify
 
 from config   import CFG
+from routes.auth import login_required
 from database import get_db
 
 bp = Blueprint('exportable', __name__, url_prefix='/api/exportable')
 
 
+@login_required
 @bp.route('', methods=['GET'])
 def get_exportable():
     schema = CFG['DB_SCHEMA']
@@ -33,6 +35,7 @@ def get_exportable():
     return jsonify(rows)
 
 
+@login_required
 @bp.route('', methods=['POST'])
 def save_exportable():
     items  = request.json or []

@@ -1,0 +1,24 @@
+ppto/
+├── app.py                   ← punto de entrada (~25 líneas)
+├── config.py                ← lee/escribe .env
+├── .env                     ← tus credenciales
+├── requirements.txt
+├── database/
+│   ├── __init__.py          ← get_db() / reset_db()
+│   ├── base.py              ← interfaz común
+│   ├── sqlserver.py         ← pyodbc
+│   ├── postgresql.py        ← psycopg2
+│   └── mysql.py             ← PyMySQL
+├── routes/
+│   ├── estimacion.py        ← /api/estimacion/*
+│   ├── tasas.py             ← /api/tasas/*
+│   ├── unitarios.py         ← /api/unitarios/*
+│   ├── exportable.py        ← /api/exportable/*
+│   ├── presupuesto.py       ← /api/ppto/*
+│   └── configuracion.py     ← /api/config/*
+├── services/
+│   ├── calculos.py          ← calcular_fila(), get_tasa_for_row()
+│   ├── exportar.py          ← build_excel()
+│   └── ddl.py               ← CREATE TABLE por motor
+└── templates/
+    └── index.html

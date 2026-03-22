@@ -40,15 +40,18 @@ ENGINES = {
 }
 
 
+@login_required
 @bp.route('/engines')
 def get_engines():
     return jsonify(ENGINES)
 
 
+@login_required
 @bp.route('/db', methods=['GET'])
 def get_db_config():
     """Devuelve la configuración actual sin exponer la contraseña."""
     from config import CFG
+from routes.auth import login_required
     return jsonify({
         'DB_ENGINE':       CFG['DB_ENGINE'],
         'DB_SERVER':       CFG['DB_SERVER'],
@@ -63,6 +66,7 @@ def get_db_config():
     })
 
 
+@login_required
 @bp.route('/db', methods=['POST'])
 def save_db_config():
     """
@@ -109,6 +113,7 @@ def save_db_config():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@login_required
 @bp.route('/db-test', methods=['POST'])
 def test_db():
     """

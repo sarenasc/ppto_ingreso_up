@@ -15,3 +15,6 @@ pyodbc>=5.0
 
 # MySQL / MariaDB
 # PyMySQL>=1.1           # descomenta si usas MySQL
+
+# Seguridad — hashing de contraseñas (incluido con Flask, se lista explícitamente)
+werkzeug>=3.0

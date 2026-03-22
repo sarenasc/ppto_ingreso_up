@@ -189,6 +189,7 @@
     <div class="nav-section">Resultados</div>
     <a class="nav-item" onclick="showPage('ppto',this)"><span class="nav-icon">📈</span> Presupuesto</a>
     <div class="nav-section">Sistema</div>
+    <a class="nav-item" onclick="showPage('usuarios',this)"><span class="nav-icon">👥</span> Usuarios</a>
     <a class="nav-item" onclick="showPage('config',this)"><span class="nav-icon">⚙️</span> Configuración BD</a>
     <div style="padding:16px;margin-top:auto;">
       <button class="btn btn-warning" style="width:100%" onclick="exportarExcel()">⬇️ Exportar Excel</button>
@@ -214,6 +215,10 @@
         </select>
       </div>
       <span class="version-badge" id="version-badge">Sin datos</span>
+      <div style="display:flex;align-items:center;gap:8px;border-left:1px solid var(--border);padding-left:12px">
+        <span style="font-size:12px;color:var(--muted)">👤 <strong id="topbar-username"></strong></span>
+        <a href="/logout" style="font-size:12px;color:var(--danger);font-weight:600;text-decoration:none;padding:4px 10px;border:1px solid var(--danger);border-radius:20px" title="Cerrar sesión">Salir</a>
+      </div>
     </div>
   </div>
 
@@ -384,6 +389,45 @@
       </div>
     </div>
 
+
+    <!-- USUARIOS -->
+    <div id="page-usuarios" class="page">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">➕ Nuevo Usuario</div>
+          <div class="form-group">
+            <label>Nombre de usuario</label>
+            <input type="text" id="nu-username" placeholder="ej: juan.perez" autocomplete="off">
+            <p class="tip">Solo letras, números, puntos y guiones bajos.</p>
+          </div>
+          <div class="form-group">
+            <label>Contraseña</label>
+            <input type="password" id="nu-password" placeholder="Mínimo 4 caracteres" autocomplete="new-password">
+          </div>
+          <button class="btn btn-success" onclick="crearUsuario()">👤 Crear Usuario</button>
+        </div>
+        <div class="card">
+          <div class="card-title">👥 Usuarios del Sistema</div>
+          <div id="usuarios-list"><div class="empty-state"><div class="icon">👥</div>Cargando...</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🔑 Cambiar Contraseña</div>
+        <p class="text-muted" style="margin-bottom:16px;font-size:13px">Selecciona un usuario y establece su nueva contraseña.</p>
+        <div class="field-row">
+          <div class="form-group">
+            <label>Usuario</label>
+            <select id="cp-usuario"><option value="">— Seleccionar —</option></select>
+          </div>
+          <div class="form-group">
+            <label>Nueva contraseña</label>
+            <input type="password" id="cp-password" placeholder="Mínimo 4 caracteres" autocomplete="new-password">
+          </div>
+        </div>
+        <button class="btn btn-warning" onclick="cambiarPassword()">🔑 Cambiar Contraseña</button>
+      </div>
+    </div>
+
     <!-- ══════════════ CONFIGURACIÓN BD ══════════════ -->
     <div id="page-config" class="page">
 
@@ -514,7 +558,7 @@ function showPage(page, el) {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   if (el) el.classList.add('active');
-  const titles = {dashboard:'Dashboard',estimacion:'Estimación',tasas:'Tasas de Cambio',
+  const titles = {dashboard:'Dashboard',estimacion:'Estimación',tasas:'Tasas de Cambio',usuarios:'Gestión de Usuarios',
                   unitarios:'Unitarios (USD)',exportable:'% Exportable',
                   ppto:'Presupuesto',config:'Configuración BD'};
   document.getElementById('page-title').textContent = titles[page]||page;
@@ -525,6 +569,7 @@ function showPage(page, el) {
   if (page==='ppto')        loadPpto();
   if (page==='dashboard')   loadDashboard();
   if (page==='config')      initConfigPage();
+  if (page==='usuarios')    loadUsuarios();
 }
 
 // ════════════════════════════════════════════════════════
@@ -1031,12 +1076,94 @@ function updateEngineBadge(engine) {
   badge.textContent=(eng.icon||'🗄️')+' '+(eng.label||engine);
 }
 
+
+// ════════════════════════════════════════════════════════
+//  USUARIOS
+// ════════════════════════════════════════════════════════
+let _usuariosData = [];
+
+async function loadUsuarios() {
+  _usuariosData = await fetch('/api/usuarios').then(r=>r.json());
+  renderUsuariosList();
+  renderUsuariosSelect();
+}
+
+function renderUsuariosList() {
+  const el = document.getElementById('usuarios-list');
+  if (!_usuariosData.length) {
+    el.innerHTML='<div class="empty-state"><div class="icon">👥</div>Sin usuarios</div>';
+    return;
+  }
+  const me = document.getElementById('topbar-username').textContent;
+  el.innerHTML=`<table><thead><tr><th>Usuario</th><th>Creado</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${_usuariosData.map(u=>`<tr>
+      <td><strong>${u.username}</strong>${u.username===me?' <span class="badge badge-blue">tú</span>':''}</td>
+      <td>${(u.creado_en||'').slice(0,10)}</td>
+      <td>${u.activo?'<span class="badge badge-green">Activo</span>':'<span class="badge">Inactivo</span>'}</td>
+      <td>${u.username!==me?`<button class="btn btn-danger btn-xs" onclick="eliminarUsuario(${u.id},'${u.username}')">✕</button>`:'—'}</td>
+    </tr>`).join('')}
+  </tbody></table>`;
+}
+
+function renderUsuariosSelect() {
+  const sel = document.getElementById('cp-usuario');
+  sel.innerHTML = '<option value="">— Seleccionar —</option>';
+  _usuariosData.forEach(u => {
+    const o = new Option(u.username, u.id);
+    sel.appendChild(o);
+  });
+}
+
+async function crearUsuario() {
+  const username = (document.getElementById('nu-username').value||'').trim();
+  const password = document.getElementById('nu-password').value||'';
+  if (!username) { showAlert('Ingresa un nombre de usuario','error'); return; }
+  if (password.length < 4) { showAlert('La contraseña debe tener al menos 4 caracteres','error'); return; }
+  const data = await fetch('/api/usuarios',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username, password})
+  }).then(r=>r.json());
+  if (data.ok) {
+    showAlert(`Usuario '${username}' creado ✅`);
+    document.getElementById('nu-username').value='';
+    document.getElementById('nu-password').value='';
+    loadUsuarios();
+  } else { showAlert(data.error||'Error al crear usuario','error'); }
+}
+
+async function eliminarUsuario(id, username) {
+  if (!confirm(`¿Eliminar el usuario '${username}'? Esta acción no se puede deshacer.`)) return;
+  const data = await fetch(`/api/usuarios/${id}`,{method:'DELETE'}).then(r=>r.json());
+  if (data.ok) { showAlert(`Usuario '${username}' eliminado`); loadUsuarios(); }
+  else { showAlert(data.error||'Error al eliminar','error'); }
+}
+
+async function cambiarPassword() {
+  const uid      = document.getElementById('cp-usuario').value;
+  const password = document.getElementById('cp-password').value||'';
+  if (!uid) { showAlert('Selecciona un usuario','error'); return; }
+  if (password.length < 4) { showAlert('La contraseña debe tener al menos 4 caracteres','error'); return; }
+  const data = await fetch(`/api/usuarios/${uid}/password`,{
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({password})
+  }).then(r=>r.json());
+  if (data.ok) {
+    showAlert('Contraseña actualizada ✅');
+    document.getElementById('cp-password').value='';
+  } else { showAlert(data.error||'Error al cambiar contraseña','error'); }
+}
+
 // ════════════════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════════════════
 (async ()=>{
   await cargarMonedasSelector();
   document.getElementById('kpi-mon-lbl').textContent = monedaActual;
+  // Mostrar usuario activo en topbar
+  try {
+    const me = await fetch('/api/me').then(r=>r.json());
+    if (me.username) document.getElementById('topbar-username').textContent = me.username;
+  } catch(e) {}
   loadDashboard();
 })();
 </script>

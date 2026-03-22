@@ -11,11 +11,13 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify
 
 from config   import CFG
+from routes.auth import login_required
 from database import get_db
 
 bp = Blueprint('tasas', __name__, url_prefix='/api/tasas')
 
 
+@login_required
 @bp.route('', methods=['GET'])
 def get_tasas():
     schema = CFG['DB_SCHEMA']
@@ -41,6 +43,7 @@ def get_tasas():
     return jsonify(rows)
 
 
+@login_required
 @bp.route('', methods=['POST'])
 def add_tasa():
     data = request.json or {}
@@ -76,6 +79,7 @@ def add_tasa():
     return jsonify({'ok': True, 'moneda': moneda})
 
 
+@login_required
 @bp.route('/<int:tid>', methods=['DELETE'])
 def delete_tasa(tid):
     schema = CFG['DB_SCHEMA']
@@ -88,6 +92,7 @@ def delete_tasa(tid):
     return jsonify({'ok': True})
 
 
+@login_required
 @bp.route('/monedas')
 def get_monedas():
     """Devuelve las monedas únicas que tienen al menos una tasa activa."""
