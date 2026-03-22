@@ -166,6 +166,63 @@
   .conn-fail { background: #fee2e2; color: #991b1b; }
   .conn-idle { background: #f3f4f6; color: #6b7280; }
   .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  /* ── Árbol jerárquico ── */
+  .arbol-row { display:flex; align-items:center; gap:0; border-bottom:1px solid var(--border);
+               transition: background .15s; cursor:default; }
+  .arbol-row:hover { background: rgba(45,106,159,.04); }
+
+  .arbol-toggle { width:28px; min-width:28px; height:36px; display:flex; align-items:center;
+                  justify-content:center; cursor:pointer; font-size:13px; font-weight:700;
+                  color:var(--primary); border-radius:4px; transition:background .15s; user-select:none; }
+  .arbol-toggle:hover { background:rgba(45,106,159,.12); }
+
+  .arbol-indent-1 { padding-left:28px; }
+  .arbol-indent-2 { padding-left:56px; }
+
+  .arbol-label { flex:1; padding:8px 6px 8px 0; font-size:13px; overflow:hidden;
+                 text-overflow:ellipsis; white-space:nowrap; }
+  .arbol-num   { width:110px; min-width:110px; text-align:right; padding:8px 12px;
+                 font-size:13px; color:var(--text); }
+  .arbol-usd   { width:110px; min-width:110px; text-align:right; padding:8px 12px;
+                 font-size:13px; }
+  .arbol-clp   { width:120px; min-width:120px; text-align:right; padding:8px 12px 8px 0;
+                 font-size:13px; font-weight:600; color:#5b21b6; }
+
+  /* Nivel mes */
+  .arbol-mes { background:#f8fafc; border-left:4px solid var(--primary); }
+  .arbol-mes .arbol-label { font-weight:700; color:var(--primary); font-size:14px; }
+  .arbol-mes .arbol-num   { font-weight:700; color:var(--primary); }
+  .arbol-mes .arbol-usd   { font-weight:700; color:#1e40af; }
+
+  /* Nivel exportadora */
+  .arbol-exp { background:white; border-left:4px solid var(--primary-light); }
+  .arbol-exp .arbol-label { font-weight:600; color:var(--primary-light); }
+  .arbol-exp .arbol-usd   { color:#1e40af; }
+
+  /* Nivel especie */
+  .arbol-esp { background:#fafafa; border-left:4px solid #e2e8f0; }
+  .arbol-esp .arbol-label { color:var(--text); }
+  .arbol-esp .arbol-usd   { color:#374151; }
+  .arbol-esp .arbol-clp   { font-weight:400; color:#6b7280; }
+
+  /* Header del árbol */
+  .arbol-header { display:flex; align-items:center; border-bottom:2px solid var(--primary);
+                  background:var(--primary); color:white; border-radius:6px 6px 0 0; }
+  .arbol-header .arbol-toggle { color:white; cursor:default; }
+  .arbol-header .arbol-label  { color:white; font-weight:700; font-size:12px; padding:10px 6px 10px 0; }
+  .arbol-header .arbol-num    { color:white; font-weight:700; font-size:12px; }
+  .arbol-header .arbol-usd    { color:white; font-weight:700; font-size:12px; }
+  .arbol-header .arbol-clp    { color:white; font-weight:700; font-size:12px; }
+
+  /* Fila de totales */
+  .arbol-total { background:#fff3cd; border-left:4px solid var(--accent); }
+  .arbol-total .arbol-label { font-weight:700; color:var(--accent); }
+  .arbol-total .arbol-num   { font-weight:700; }
+  .arbol-total .arbol-usd   { font-weight:700; color:#1e40af; }
+  .arbol-total .arbol-clp   { font-weight:700; color:#5b21b6; }
+
+  .arbol-hidden { display:none !important; }
+
 </style>
 </head>
 <body>
@@ -236,9 +293,18 @@
         <div class="kpi orange"><div class="kpi-label">USD Total</div><div class="kpi-value" id="kpi-usd">—</div><div class="kpi-sub">Packing + Frío</div></div>
         <div class="kpi red"><div class="kpi-label">Ingreso <span id="kpi-mon-lbl">CLP</span></div><div class="kpi-value" id="kpi-clp">—</div><div class="kpi-sub">USD Total × Tasa</div></div>
       </div>
-      <div class="grid-2">
-        <div class="card"><div class="card-title">📅 Por Mes</div><div id="dash-mes-table"><div class="empty-state"><div class="icon">📊</div>Carga una estimación para ver datos</div></div></div>
-        <div class="card"><div class="card-title">🍋 Por Especie</div><div id="dash-esp-table"><div class="empty-state"><div class="icon">🌿</div>Carga una estimación para ver datos</div></div></div>
+      <!-- Árbol jerárquico en dashboard -->
+      <div class="card" style="margin-top:0">
+        <div class="card-title" style="justify-content:space-between">
+          <span>📊 Resumen por Mes → Exportadora → Especie</span>
+          <div class="flex" style="gap:8px">
+            <button class="btn btn-outline btn-sm" onclick="expandirTodoDash()">＋ Todo</button>
+            <button class="btn btn-outline btn-sm" onclick="colapsarTodoDash()">－ Todo</button>
+          </div>
+        </div>
+        <div id="dash-arbol-container">
+          <div class="empty-state"><div class="icon">📊</div>Carga una estimación para ver datos</div>
+        </div>
       </div>
     </div>
 
@@ -381,12 +447,26 @@
           <div class="tab active" onclick="setPptoView('mes',this)">Por Mes</div>
           <div class="tab" onclick="setPptoView('semana',this)">Por Semana</div>
           <div class="tab" onclick="setPptoView('especie',this)">Por Especie</div>
+          <div class="tab" onclick="setPptoView('arbol',this)">🌳 Árbol</div>
         </div>
         <button class="btn btn-warning" onclick="exportarExcel()">⬇️ Exportar Excel</button>
       </div>
       <div class="card">
         <div class="card-title" id="ppto-card-title">📈 Presupuesto por Mes</div>
         <div id="ppto-table"><div class="empty-state"><div class="icon">📈</div>Configura los parámetros para ver el presupuesto</div></div>
+      </div>
+      <!-- Árbol jerárquico Mes → Exportadora → Especie -->
+      <div class="card" id="card-arbol" style="display:none;margin-top:0">
+        <div class="card-title" style="justify-content:space-between">
+          <span>🌳 Vista Árbol — Mes → Exportadora → Especie</span>
+          <div class="flex" style="gap:8px">
+            <button class="btn btn-outline btn-sm" onclick="expandirTodo()">＋ Todo</button>
+            <button class="btn btn-outline btn-sm" onclick="colapsarTodo()">－ Todo</button>
+          </div>
+        </div>
+        <div id="arbol-container">
+          <div class="empty-state"><div class="icon">🌳</div>Carga una estimación para ver el árbol</div>
+        </div>
       </div>
     </div>
 
@@ -900,6 +980,11 @@ async function loadPpto() {
   const labels= {mes:'Mes',semana:'Semana',especie:'Especie'};
   document.getElementById('ppto-card-title').textContent='📈 Presupuesto por '+labels[currentPptoView];
   if (!data.length) { el.innerHTML='<div class="empty-state"><div class="icon">📈</div>Sin datos</div>'; return; }
+  if (currentPptoView==='mes') {
+    const _MN={Enero:1,Febrero:2,Marzo:3,Abril:4,Mayo:5,Junio:6,Julio:7,Agosto:8,Septiembre:9,Octubre:10,Noviembre:11,Diciembre:12};
+    const _OT=[11,12,1,2,3,4,5,6,7,8,9,10];
+    data.sort((a,b)=>{const ia=_OT.indexOf(_MN[a.periodo]??99);const ib=_OT.indexOf(_MN[b.periodo]??99);return(ia<0?99:ia)-(ib<0?99:ib);});
+  }
   let tk=0,te=0,tp=0,tf=0,tu=0,tm=0;
   data.forEach(r=>{ tk+=r.kgs_totales||0; te+=r.kg_export||0; tp+=r.usd_packing||0; tf+=r.usd_frio||0; tu+=r.usd_total||0; tm+=r.clp_total||0; });
   el.innerHTML=`<div class="table-wrap"><table><thead><tr>
@@ -928,7 +1013,18 @@ function setPptoView(view, el) {
   currentPptoView=view;
   document.querySelectorAll('#page-ppto .tab').forEach(t=>t.classList.remove('active'));
   if(el) el.classList.add('active');
-  loadPpto();
+  const cardArbol  = document.getElementById('card-arbol');
+  const pptoTable  = document.getElementById('ppto-table');
+  const pptoCard   = pptoTable ? pptoTable.closest('.card') : null;
+  if (view === 'arbol') {
+    if (pptoCard)  pptoCard.style.display  = 'none';
+    if (cardArbol) cardArbol.style.display = 'block';
+    cargarArbol();
+  } else {
+    if (pptoCard)  pptoCard.style.display  = 'block';
+    if (cardArbol) cardArbol.style.display = 'none';
+    loadPpto();
+  }
 }
 
 // ════════════════════════════════════════════════════════
@@ -936,12 +1032,24 @@ function setPptoView(view, el) {
 // ════════════════════════════════════════════════════════
 async function loadDashboard() {
   try {
-    const [rMes,rEsp] = await Promise.all([
-      fetch(`/api/ppto/resumen?agrupar=mes&moneda=${monedaActual}`).then(r=>r.json()),
-      fetch(`/api/ppto/resumen?agrupar=especie&moneda=${monedaActual}`).then(r=>r.json()),
+    const [rArbol, vr] = await Promise.all([
+      fetch(`/api/ppto/arbol?moneda=${monedaActual}`).then(r=>r.json()),
+      fetch('/api/estimacion/versions').then(r=>r.json()),
     ]);
+
+    const arbolData = rArbol.arbol || [];
+
+    // Calcular KPIs desde el árbol
     let tk=0,te=0,tp=0,tf=0,tu=0,tm=0;
-    rMes.forEach(r=>{ tk+=r.kgs_totales||0; te+=r.kg_export||0; tp+=r.usd_packing||0; tf+=r.usd_frio||0; tu+=r.usd_total||0; tm+=r.clp_total||0; });
+    arbolData.forEach(mes => {
+      tk += mes.kgs        || 0;
+      te += mes.kg_export  || 0;
+      tp += mes.usd_packing|| 0;
+      tf += mes.usd_frio   || 0;
+      tu += mes.usd_total  || 0;
+      tm += mes.clp_total  || 0;
+    });
+
     document.getElementById('kpi-kgs').textContent    = fmt(tk);
     document.getElementById('kpi-kgexp').textContent  = fmt(te);
     document.getElementById('kpi-usd-pk').textContent = tp>1e6?'$'+fmt(tp/1e6,2)+'M':fmtUSD(tp);
@@ -950,24 +1058,17 @@ async function loadDashboard() {
     document.getElementById('kpi-clp').textContent    = tm>1e9?fmt(tm/1e9,1)+'B':tm>1e6?fmt(tm/1e6,2)+'M':fmtMon(tm);
     document.getElementById('kpi-mon-lbl').textContent= monedaActual;
 
-    const tblHdr=`<th>Mes</th><th class="num">Kgs</th><th class="num" style="background:#1e40af">USD Pack.</th><th class="num" style="background:#0c4a6e">USD Frío</th><th class="num" style="background:#5b21b6">USD Total</th><th class="num">${monedaActual}</th>`;
-    const tblRow=r=>`<tr><td>${r.periodo}</td><td class="num">${fmt(r.kgs_totales)}</td>
-      <td class="num" style="color:#1e40af">${fmtUSD(r.usd_packing)}</td>
-      <td class="num" style="color:#0c4a6e">${fmtUSD(r.usd_frio)}</td>
-      <td class="num" style="color:#5b21b6;font-weight:700">${fmtUSD(r.usd_total)}</td>
-      <td class="num"><strong>${fmtMon(r.clp_total)}</strong></td></tr>`;
-    if(rMes.length) document.getElementById('dash-mes-table').innerHTML=`<table><thead><tr>${tblHdr}</tr></thead><tbody>${rMes.map(tblRow).join('')}</tbody></table>`;
-    if(rEsp.length) {
-      const h=tblHdr.replace('>Mes<','>Especie<');
-      document.getElementById('dash-esp-table').innerHTML=`<table><thead><tr>${h}</tr></thead><tbody>${rEsp.map(tblRow).join('')}</tbody></table>`;
-    }
-    const vr = await fetch('/api/estimacion/versions').then(r=>r.json());
+    // Guardar datos y renderizar árbol en dashboard
+    _dashArbolData = arbolData;
+    renderArbolEn('dash-arbol-container', arbolData, rArbol.moneda||monedaActual, '_dash');
+
     if (vr.length) {
       document.getElementById('version-badge').textContent=`v${vr[0].numero_version}`;
       document.getElementById('topbar-info').textContent=`Actualizado: ${(vr[0].fecha_actualizacion||'').slice(0,16)} | `;
     }
-  } catch(e) { console.error(e); }
+  } catch(e) { console.error('Dashboard error:', e); }
 }
+
 
 function exportarExcel() { window.location.href=`/api/ppto/exportar?moneda=${monedaActual}`; }
 
@@ -1534,6 +1635,405 @@ async function cambiarPassword() {
     showAlert('Contraseña actualizada ✅');
     document.getElementById('cp-password').value='';
   } else { showAlert(data.error||'Error al cambiar contraseña','error'); }
+}
+
+
+
+// ════════════════════════════════════════════════════════
+//  ÁRBOL DEL DASHBOARD — Mes → Exportadora → Especie
+// ════════════════════════════════════════════════════════
+let _dashArbolData = [];
+let _dashArbolOpen = {};
+
+async function cargarArbolDash() {
+  try {
+    const res  = await fetch(`/api/ppto/arbol?moneda=${monedaActual}`);
+    const data = await res.json();
+    _dashArbolData = data.arbol || [];
+    renderArbolDash();
+  } catch(e) {
+    const ct = document.getElementById('dash-arbol-container');
+    if (ct) ct.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div>Error al cargar</div>';
+  }
+}
+
+function renderArbolDash() {
+  const ct = document.getElementById('dash-arbol-container');
+  if (!ct) return;
+  if (!_dashArbolData.length) {
+    ct.innerHTML = '<div class="empty-state"><div class="icon">📊</div>Carga una estimación para ver datos</div>';
+    return;
+  }
+
+  const totKgs = _dashArbolData.reduce((s,m)=>s+m.kgs,0);
+  const totUT  = _dashArbolData.reduce((s,m)=>s+m.usd_total,0);
+  const totCLP = _dashArbolData.reduce((s,m)=>s+m.clp_total,0);
+  const mon    = monedaActual;
+
+  let html = `<div style="overflow-x:auto"><div style="min-width:600px">
+    <div class="arbol-header">
+      <div class="arbol-toggle">　</div>
+      <div class="arbol-label">Mes / Exportadora / Especie</div>
+      <div class="arbol-num">Kgs a Proc</div>
+      <div class="arbol-usd">USD Total</div>
+      <div class="arbol-clp">Ingreso ${mon}</div>
+    </div>`;
+
+  _dashArbolData.forEach((mes, mi) => {
+    const mesKey = `d-mes-${mi}`;
+    const isOpen = !!_dashArbolOpen[mesKey];
+
+    html += `
+    <div class="arbol-row arbol-mes" id="drow-${mesKey}">
+      <div class="arbol-toggle" onclick="toggleArbolDash('${mesKey}',${mi},-1)">${isOpen?'－':'＋'}</div>
+      <div class="arbol-label">${mes.mes_nombre.toUpperCase()}</div>
+      <div class="arbol-num">${fmt(mes.kgs)}</div>
+      <div class="arbol-usd">${fmtUSD(mes.usd_total)}</div>
+      <div class="arbol-clp">${fmt(mes.clp_total)}</div>
+    </div>`;
+
+    mes.exportadoras.forEach((exp, ei) => {
+      const expKey    = `d-mes-${mi}-exp-${ei}`;
+      const isExpOpen = !!_dashArbolOpen[expKey];
+      const expHide   = isOpen ? '' : 'arbol-hidden';
+
+      html += `
+    <div class="arbol-row arbol-exp arbol-indent-1 ${expHide}" id="drow-${expKey}">
+      <div class="arbol-toggle" onclick="toggleArbolDash('${expKey}',${mi},${ei})">${isExpOpen?'－':'＋'}</div>
+      <div class="arbol-label">${exp.exportadora}</div>
+      <div class="arbol-num">${fmt(exp.kgs)}</div>
+      <div class="arbol-usd">${fmtUSD(exp.usd_total)}</div>
+      <div class="arbol-clp">${fmt(exp.clp_total)}</div>
+    </div>`;
+
+      exp.especies.forEach((esp, si) => {
+        const espHide = (isOpen && isExpOpen) ? '' : 'arbol-hidden';
+        html += `
+    <div class="arbol-row arbol-esp arbol-indent-2 ${espHide}" id="drow-${expKey}-esp-${si}">
+      <div class="arbol-toggle" style="cursor:default;color:#d1d5db">●</div>
+      <div class="arbol-label">${esp.especie}</div>
+      <div class="arbol-num">${fmt(esp.kgs)}</div>
+      <div class="arbol-usd" style="color:#374151">${fmtUSD(esp.usd_total)}</div>
+      <div class="arbol-clp" style="color:#6b7280;font-weight:400">${fmt(esp.clp_total)}</div>
+    </div>`;
+      });
+    });
+  });
+
+  html += `
+    <div class="arbol-row arbol-total">
+      <div class="arbol-toggle" style="cursor:default">Σ</div>
+      <div class="arbol-label">TOTAL GENERAL</div>
+      <div class="arbol-num">${fmt(totKgs)}</div>
+      <div class="arbol-usd">${fmtUSD(totUT)}</div>
+      <div class="arbol-clp">${fmt(totCLP)}</div>
+    </div>
+    </div></div>`;
+
+  ct.innerHTML = html;
+}
+
+function toggleArbolDash(key, mi, ei) {
+  _dashArbolOpen[key] = !_dashArbolOpen[key];
+  const isOpen = _dashArbolOpen[key];
+  const row    = document.getElementById(`drow-${key}`);
+  if (!row) return;
+  row.querySelector('.arbol-toggle').textContent = isOpen ? '－' : '＋';
+
+  const esMes = ei === -1;
+  if (esMes) {
+    const mes = _dashArbolData[mi];
+    if (!mes) return;
+    mes.exportadoras.forEach((exp, expI) => {
+      const expKey = `d-mes-${mi}-exp-${expI}`;
+      const expRow = document.getElementById(`drow-${expKey}`);
+      if (!expRow) return;
+      if (isOpen) {
+        expRow.classList.remove('arbol-hidden');
+      } else {
+        expRow.classList.add('arbol-hidden');
+        _dashArbolOpen[expKey] = false;
+        const tog = expRow.querySelector('.arbol-toggle');
+        if (tog) tog.textContent = '＋';
+        exp.especies.forEach((_, si) => {
+          const espRow = document.getElementById(`drow-${expKey}-esp-${si}`);
+          if (espRow) espRow.classList.add('arbol-hidden');
+        });
+      }
+    });
+  } else {
+    const exp = _dashArbolData[mi]?.exportadoras[ei];
+    if (!exp) return;
+    exp.especies.forEach((_, si) => {
+      const espRow = document.getElementById(`drow-${key}-esp-${si}`);
+      if (!espRow) return;
+      if (isOpen) espRow.classList.remove('arbol-hidden');
+      else        espRow.classList.add('arbol-hidden');
+    });
+  }
+}
+
+function expandirTodoDash() {
+  _dashArbolData.forEach((mes, mi) => {
+    _arbolOpenDash[`_dash-mes-${mi}`] = true;
+    mes.exportadoras.forEach((_, ei) => {
+      _arbolOpenDash[`_dash-mes-${mi}-exp-${ei}`] = true;
+    });
+  });
+  renderArbolEn('dash-arbol-container', _dashArbolData, monedaActual, '_dash');
+}
+
+function colapsarTodoDash() {
+  Object.keys(_arbolOpenDash).forEach(k => { _arbolOpenDash[k] = false; });
+  renderArbolEn('dash-arbol-container', _dashArbolData, monedaActual, '_dash');
+}
+
+// ════════════════════════════════════════════════════════
+//  ÁRBOL JERÁRQUICO — Mes → Exportadora → Especie
+// ════════════════════════════════════════════════════════
+let _arbolData   = [];
+let _arbolMoneda = 'CLP';
+
+// Estado de apertura: 'mes-N' → bool, 'mes-N-exp-X' → bool
+const _arbolOpen = {};
+
+async function cargarArbol() {
+  const ct = document.getElementById('arbol-container');
+  ct.innerHTML = '<div style="padding:20px;color:var(--muted);text-align:center">Cargando árbol...</div>';
+  try {
+    const res  = await fetch(`/api/ppto/arbol?moneda=${monedaActual}`);
+    const data = await res.json();
+    _arbolData   = data.arbol   || [];
+    _arbolMoneda = data.moneda  || monedaActual;
+    renderArbol();
+  } catch(e) {
+    ct.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div>Error al cargar el árbol</div>';
+  }
+}
+
+// Estado de apertura del arbol en DASHBOARD (separado del de Presupuesto)
+const _arbolOpenDash = {};
+
+// Renderiza el arbol en el contenedor indicado usando el estado de apertura indicado
+function renderArbolEn(containerId, arbolData, moneda, suffix) {
+  const ct = document.getElementById(containerId);
+  if (!ct) return;
+  const _open = suffix === '_dash' ? _arbolOpenDash : _arbolOpen;
+  _renderArbolInto(ct, arbolData, moneda, suffix, _open);
+}
+
+function renderArbol() {
+  renderArbolEn('arbol-container', _arbolData, _arbolMoneda, '_ppto');
+}
+
+function _renderArbolInto(ct, arbolData, moneda, suffix, _open) {
+  if (!arbolData.length) {
+    ct.innerHTML='<div class="empty-state"><div class="icon">🌳</div>Sin datos</div>';
+    return;
+  }
+  const totKgs = arbolData.reduce((s,m)=>s+m.kgs,0);
+  const totUT  = arbolData.reduce((s,m)=>s+m.usd_total,0);
+  const totCLP = arbolData.reduce((s,m)=>s+m.clp_total,0);
+
+  let html = `<div style="overflow-x:auto"><div style="min-width:640px">
+    <div class="arbol-header">
+      <div class="arbol-toggle">　</div>
+      <div class="arbol-label">Mes / Exportadora / Especie</div>
+      <div class="arbol-num">Kgs a Proc</div>
+      <div class="arbol-usd">USD Total</div>
+      <div class="arbol-clp">Ingreso ${moneda}</div>
+    </div>`;
+
+  arbolData.forEach((mes, mi) => {
+    const mesKey = `${suffix}-mes-${mi}`;
+    const isOpen = !!_open[mesKey];
+    const icon   = isOpen ? '－' : '＋';
+    html += `
+    <div class="arbol-row arbol-mes" id="row-${mesKey}">
+      <div class="arbol-toggle" onclick="toggleArbolKey('${mesKey}','${suffix}',${mi},-1)">${icon}</div>
+      <div class="arbol-label">${mes.mes_nombre.toUpperCase()}</div>
+      <div class="arbol-num">${fmt(mes.kgs)}</div>
+      <div class="arbol-usd">${fmtUSD(mes.usd_total)}</div>
+      <div class="arbol-clp">${fmt(mes.clp_total)}</div>
+    </div>`;
+
+    mes.exportadoras.forEach((exp, ei) => {
+      const expKey    = `${suffix}-mes-${mi}-exp-${ei}`;
+      const isExpOpen = !!_open[expKey];
+      const expIcon   = isExpOpen ? '－' : '＋';
+      const expHidden = isOpen ? '' : 'arbol-hidden';
+      html += `
+    <div class="arbol-row arbol-exp arbol-indent-1 ${expHidden}" id="row-${expKey}">
+      <div class="arbol-toggle" onclick="toggleArbolKey('${expKey}','${suffix}',${mi},${ei})">${expIcon}</div>
+      <div class="arbol-label">${exp.exportadora}</div>
+      <div class="arbol-num">${fmt(exp.kgs)}</div>
+      <div class="arbol-usd">${fmtUSD(exp.usd_total)}</div>
+      <div class="arbol-clp">${fmt(exp.clp_total)}</div>
+    </div>`;
+
+      exp.especies.forEach((esp, si) => {
+        const espHidden = (isOpen && isExpOpen) ? '' : 'arbol-hidden';
+        html += `
+    <div class="arbol-row arbol-esp arbol-indent-2 ${espHidden}" id="row-${expKey}-esp-${si}">
+      <div class="arbol-toggle" style="cursor:default;color:#d1d5db">●</div>
+      <div class="arbol-label">${esp.especie}</div>
+      <div class="arbol-num">${fmt(esp.kgs)}</div>
+      <div class="arbol-usd" style="color:#374151">${fmtUSD(esp.usd_total)}</div>
+      <div class="arbol-clp" style="color:#6b7280;font-weight:400">${fmt(esp.clp_total)}</div>
+    </div>`;
+      });
+    });
+  });
+
+  html += `
+    <div class="arbol-row arbol-total">
+      <div class="arbol-toggle" style="cursor:default">Σ</div>
+      <div class="arbol-label">TOTAL GENERAL</div>
+      <div class="arbol-num">${fmt(totKgs)}</div>
+      <div class="arbol-usd">${fmtUSD(totUT)}</div>
+      <div class="arbol-clp">${fmt(totCLP)}</div>
+    </div>
+    </div></div>`;
+
+  ct.innerHTML = html;
+}
+
+
+function toggleArbol(key) {
+  // Determinar si es mes o exportadora
+  const partes = key.split('-');
+  const esMes  = partes.length === 2; // 'mes-N'
+
+  _arbolOpen[key] = !_arbolOpen[key];
+  const isOpen = _arbolOpen[key];
+
+  const row = document.getElementById(`row-${key}`);
+  if (!row) return;
+
+  // Cambiar ícono
+  const toggle = row.querySelector('.arbol-toggle');
+  if (toggle) toggle.textContent = isOpen ? '－' : '＋';
+
+  if (esMes) {
+    // Nivel mes: mostrar/ocultar exportadoras
+    // Al cerrar el mes, también cerrar todas sus exportadoras
+    const mi = partes[1];
+    const mesObj = _arbolData[parseInt(mi)];
+    if (!mesObj) return;
+
+    mesObj.exportadoras.forEach((exp, ei) => {
+      const expKey = `mes-${mi}-exp-${ei}`;
+      const expRow = document.getElementById(`row-${expKey}`);
+      if (!expRow) return;
+
+      if (isOpen) {
+        expRow.classList.remove('arbol-hidden');
+      } else {
+        expRow.classList.add('arbol-hidden');
+        // Cerrar también las especies de esta exportadora
+        _arbolOpen[expKey] = false;
+        const expToggle = expRow.querySelector('.arbol-toggle');
+        if (expToggle) expToggle.textContent = '＋';
+        exp.especies.forEach((esp, si) => {
+          const espRow = document.getElementById(`row-${expKey}-esp-${si}`);
+          if (espRow) espRow.classList.add('arbol-hidden');
+        });
+      }
+    });
+  } else {
+    // Nivel exportadora: mostrar/ocultar solo especies de esta exportadora
+    const [, mi,, ei] = partes; // mes-N-exp-E
+    const mesObj = _arbolData[parseInt(mi)];
+    if (!mesObj) return;
+    const expObj = mesObj.exportadoras[parseInt(ei)];
+    if (!expObj) return;
+
+    expObj.especies.forEach((esp, si) => {
+      const espKey = `${key}-esp-${si}`;
+      const espRow = document.getElementById(`row-${espKey}`);
+      if (!espRow) return;
+      if (isOpen) espRow.classList.remove('arbol-hidden');
+      else        espRow.classList.add('arbol-hidden');
+    });
+  }
+}
+
+function expandirTodo() {
+  _arbolData.forEach((mes, mi) => {
+    _arbolOpen[`_ppto-mes-${mi}`] = true;
+    mes.exportadoras.forEach((_, ei) => {
+      _arbolOpen[`_ppto-mes-${mi}-exp-${ei}`] = true;
+    });
+  });
+  renderArbol();
+}
+
+function colapsarTodo() {
+  Object.keys(_arbolOpen).forEach(k => { _arbolOpen[k] = false; });
+  renderArbol();
+}
+
+
+function toggleArbolKey(key, suffix, mi, ei) {
+  const _open    = suffix === '_dash' ? _arbolOpenDash : _arbolOpen;
+  const data     = suffix === '_dash' ? _dashArbolData : _arbolData;
+  _open[key]     = !_open[key];
+  const isOpen   = _open[key];
+  const row      = document.getElementById(`row-${key}`);
+  if (!row) return;
+  row.querySelector('.arbol-toggle').textContent = isOpen ? '－' : '＋';
+  const esMes = ei === -1;
+  if (esMes) {
+    const mes = data[mi];
+    if (!mes) return;
+    mes.exportadoras.forEach((exp, expI) => {
+      const expKey = `${suffix}-mes-${mi}-exp-${expI}`;
+      const expRow = document.getElementById(`row-${expKey}`);
+      if (!expRow) return;
+      if (isOpen) {
+        expRow.classList.remove('arbol-hidden');
+      } else {
+        expRow.classList.add('arbol-hidden');
+        _open[expKey] = false;
+        const tog = expRow.querySelector('.arbol-toggle');
+        if (tog) tog.textContent = '＋';
+        exp.especies.forEach((_, si) => {
+          const espRow = document.getElementById(`row-${expKey}-esp-${si}`);
+          if (espRow) espRow.classList.add('arbol-hidden');
+        });
+      }
+    });
+  } else {
+    const exp = data[mi]?.exportadoras[ei];
+    if (!exp) return;
+    exp.especies.forEach((_, si) => {
+      const espRow = document.getElementById(`row-${key}-esp-${si}`);
+      if (!espRow) return;
+      if (isOpen) espRow.classList.remove('arbol-hidden');
+      else        espRow.classList.add('arbol-hidden');
+    });
+  }
+}
+
+function expandirTodo() {
+  _arbolData.forEach((mes, mi) => {
+    _arbolOpen[`_ppto-mes-${mi}`] = true;
+    mes.exportadoras.forEach((_, ei) => { _arbolOpen[`_ppto-mes-${mi}-exp-${ei}`] = true; });
+  });
+  renderArbol();
+}
+
+function colapsarTodo() {
+  Object.keys(_arbolOpen).forEach(k => { _arbolOpen[k] = false; });
+  renderArbol();
+}
+
+function expandirTodoDash2() {
+  _dashArbolData.forEach((mes, mi) => {
+    _arbolOpenDash[`_dash-mes-${mi}`] = true;
+    mes.exportadoras.forEach((_, ei) => { _arbolOpenDash[`_dash-mes-${mi}-exp-${ei}`] = true; });
+  });
+  if (suffix === '_dash') renderArbolEn('dash-arbol-container', _dashArbolData, monedaActual, '_dash');
 }
 
 // ════════════════════════════════════════════════════════
