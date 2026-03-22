@@ -291,7 +291,7 @@
         <div class="kpi" style="border-left-color:#2563eb"><div class="kpi-label">USD Packing</div><div class="kpi-value" id="kpi-usd-pk" style="color:#1e40af">—</div><div class="kpi-sub">Kgs Proc × P.Unit Packing</div></div>
         <div class="kpi" style="border-left-color:#0284c7"><div class="kpi-label">USD Frío</div><div class="kpi-value" id="kpi-usd-fr" style="color:#0c4a6e">—</div><div class="kpi-sub">Kg Export × P.Unit Frío</div></div>
         <div class="kpi orange"><div class="kpi-label">USD Total</div><div class="kpi-value" id="kpi-usd">—</div><div class="kpi-sub">Packing + Frío</div></div>
-        <div class="kpi red"><div class="kpi-label">Ingreso <span id="kpi-mon-lbl">CLP</span></div><div class="kpi-value" id="kpi-clp">—</div><div class="kpi-sub">USD Total × Tasa</div></div>
+        <div class="kpi red"><div class="kpi-label">Ingreso CLP<span id="kpi-mon-lbl"></span></div><div class="kpi-value" id="kpi-clp">—</div><div class="kpi-sub">CLP total</div></div>
       </div>
       <!-- Árbol jerárquico en dashboard -->
       <div class="card" style="margin-top:0">
@@ -992,7 +992,7 @@ async function loadPpto() {
     <th class="num" style="background:#1e40af">💼 USD Pack.</th>
     <th class="num" style="background:#0c4a6e">❄️ USD Frío</th>
     <th class="num" style="background:#5b21b6">💰 USD Total</th>
-    <th class="num">Tasa</th><th class="num">Ingreso ${monedaActual}</th>
+    <th class="num">Tasa</th><th class="num">Ingreso CLP</th>
   </tr></thead><tbody>
     ${data.map(r=>`<tr>
       <td><strong>${r.periodo}</strong></td>
