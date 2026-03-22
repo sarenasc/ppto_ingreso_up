@@ -355,3 +355,74 @@ def _wrap(engine_key, usuario_fn):
 _DDL_BUILDERS['sqlserver']  = _wrap('sqlserver',  _usuarios_sqlserver)
 _DDL_BUILDERS['postgresql'] = _wrap('postgresql', _usuarios_postgresql)
 _DDL_BUILDERS['mysql']      = _wrap('mysql',      _usuarios_mysql)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# DDL para tabla de ingreso manual USD
+# ─────────────────────────────────────────────────────────────────────
+
+def _ingreso_sqlserver(s: str) -> list[str]:
+    return [f"""
+        IF NOT EXISTS (SELECT * FROM sys.tables
+                       WHERE name='ppto_ingreso_usd' AND schema_id=SCHEMA_ID('{s}'))
+        CREATE TABLE {s}.ppto_ingreso_usd (
+            id            INT IDENTITY(1,1) PRIMARY KEY,
+            temporada     NVARCHAR(20)  NOT NULL DEFAULT '',
+            exportadora   NVARCHAR(100) NOT NULL,
+            especie       NVARCHAR(100) NOT NULL,
+            mes           INT           NOT NULL,
+            usd_packing   FLOAT         NOT NULL DEFAULT 0,
+            usd_frio      FLOAT         NOT NULL DEFAULT 0,
+            usd_total     FLOAT         NOT NULL DEFAULT 0,
+            actualizado_en DATETIME2    NOT NULL DEFAULT GETDATE(),
+            usuario       NVARCHAR(50)  NOT NULL DEFAULT 'sistema',
+            CONSTRAINT uq_ingreso UNIQUE (temporada, exportadora, especie, mes)
+        )"""]
+
+
+def _ingreso_postgresql(s: str) -> list[str]:
+    return [f"""
+        CREATE TABLE IF NOT EXISTS {s}.ppto_ingreso_usd (
+            id             SERIAL        PRIMARY KEY,
+            temporada      VARCHAR(20)   NOT NULL DEFAULT '',
+            exportadora    VARCHAR(100)  NOT NULL,
+            especie        VARCHAR(100)  NOT NULL,
+            mes            INT           NOT NULL,
+            usd_packing    FLOAT         NOT NULL DEFAULT 0,
+            usd_frio       FLOAT         NOT NULL DEFAULT 0,
+            usd_total      FLOAT         NOT NULL DEFAULT 0,
+            actualizado_en TIMESTAMP     NOT NULL DEFAULT NOW(),
+            usuario        VARCHAR(50)   NOT NULL DEFAULT 'sistema',
+            UNIQUE (temporada, exportadora, especie, mes)
+        )"""]
+
+
+def _ingreso_mysql(s: str) -> list[str]:
+    return [f"""
+        CREATE TABLE IF NOT EXISTS {s}.ppto_ingreso_usd (
+            id             INT AUTO_INCREMENT PRIMARY KEY,
+            temporada      VARCHAR(20)  NOT NULL DEFAULT '',
+            exportadora    VARCHAR(100) NOT NULL,
+            especie        VARCHAR(100) NOT NULL,
+            mes            INT          NOT NULL,
+            usd_packing    DOUBLE       NOT NULL DEFAULT 0,
+            usd_frio       DOUBLE       NOT NULL DEFAULT 0,
+            usd_total      DOUBLE       NOT NULL DEFAULT 0,
+            actualizado_en DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            usuario        VARCHAR(50)  NOT NULL DEFAULT 'sistema',
+            UNIQUE KEY uq_ingreso (temporada, exportadora, especie, mes)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"""]
+
+
+# Inyectar tabla ingreso en los builders
+_orig2 = dict(_DDL_BUILDERS)
+
+def _wrap2(engine_key, ingreso_fn):
+    original = _orig2[engine_key]
+    def builder(s):
+        return original(s) + ingreso_fn(s)
+    return builder
+
+_DDL_BUILDERS['sqlserver']  = _wrap2('sqlserver',  _ingreso_sqlserver)
+_DDL_BUILDERS['postgresql'] = _wrap2('postgresql', _ingreso_postgresql)
+_DDL_BUILDERS['mysql']      = _wrap2('mysql',      _ingreso_mysql)

@@ -98,3 +98,71 @@ def exportar():
         as_attachment=True,
         download_name=f'Presupuesto_{moneda}_{now_str}.xlsx',
     )
+
+
+@bp.route('/arbol')
+@login_required
+def arbol():
+    """
+    Devuelve datos agrupados en jerarquia Mes -> Exportadora -> Especie.
+    Usado por la vista arbol del presupuesto.
+    ?moneda=CLP
+    """
+    moneda = (request.args.get('moneda') or 'CLP').strip().upper()
+    rows, tasas, unitarios, exportable = load_calc_data()
+
+    from services.calculos import sort_mes_temporada, MESES_NOMBRE
+
+    # Acumular en dict anidado: mes -> exportadora -> especie -> totales
+    arbol: dict = {}
+    for row in rows:
+        mes    = row.get('mes')    or 0
+        exp    = row.get('exportadora') or 'Sin Exportadora'
+        esp    = row.get('especie')     or 'Sin Especie'
+        c      = calcular_fila(row, unitarios, exportable, tasas, moneda)
+
+        arbol.setdefault(mes, {})
+        arbol[mes].setdefault(exp, {})
+        arbol[mes][exp].setdefault(esp, {
+            'kgs': 0, 'kg_export': 0,
+            'usd_packing': 0, 'usd_frio': 0,
+            'usd_total': 0, 'clp_total': 0,
+        })
+        d = arbol[mes][exp][esp]
+        d['kgs']        += c['kgs']
+        d['kg_export']  += c['kg_export']
+        d['usd_packing']+= c['usd_packing']
+        d['usd_frio']   += c['usd_frio']
+        d['usd_total']  += c['usd_total']
+        d['clp_total']  += c['clp_total']
+
+    # Serializar en lista ordenada
+    resultado = []
+    for mes in sorted(arbol.keys(), key=sort_mes_temporada):
+        mes_data = {
+            'mes':         mes,
+            'mes_nombre':  MESES_NOMBRE.get(mes, f'Mes {mes}'),
+            'kgs':         0, 'kg_export':   0,
+            'usd_packing': 0, 'usd_frio':    0,
+            'usd_total':   0, 'clp_total':   0,
+            'exportadoras': [],
+        }
+        for exp in sorted(arbol[mes].keys()):
+            exp_data = {
+                'exportadora': exp,
+                'kgs':         0, 'kg_export':   0,
+                'usd_packing': 0, 'usd_frio':    0,
+                'usd_total':   0, 'clp_total':   0,
+                'especies': [],
+            }
+            for esp in sorted(arbol[mes][exp].keys()):
+                d = arbol[mes][exp][esp]
+                exp_data['especies'].append({'especie': esp, **d})
+                for k in ('kgs','kg_export','usd_packing','usd_frio','usd_total','clp_total'):
+                    exp_data[k] += d[k]
+            mes_data['exportadoras'].append(exp_data)
+            for k in ('kgs','kg_export','usd_packing','usd_frio','usd_total','clp_total'):
+                mes_data[k] += exp_data[k]
+        resultado.append(mes_data)
+
+    return jsonify({'arbol': resultado, 'moneda': moneda})

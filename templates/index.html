@@ -182,6 +182,7 @@
     <a class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon">📊</span> Dashboard</a>
     <div class="nav-section">Datos</div>
     <a class="nav-item" onclick="showPage('estimacion',this)"><span class="nav-icon">📤</span> Estimación</a>
+    <a class="nav-item" onclick="showPage('ingreso',this)"><span class="nav-icon">✏️</span> Ingreso USD</a>
     <div class="nav-section">Parámetros</div>
     <a class="nav-item" onclick="showPage('tasas',this)"><span class="nav-icon">💱</span> Tasas de Cambio</a>
     <a class="nav-item" onclick="showPage('unitarios',this)"><span class="nav-icon">💰</span> Unitarios (USD)</a>
@@ -390,6 +391,89 @@
     </div>
 
 
+
+    <!-- ══════════════ INGRESO USD ══════════════ -->
+    <div id="page-ingreso" class="page">
+
+      <!-- Formulario de ingreso -->
+      <div class="card">
+        <div class="card-title" style="justify-content:space-between">
+          <span>✏️ Ingresar / Editar Montos USD</span>
+          <div class="flex" style="gap:8px">
+            <select id="ing-temporada" style="font-size:12px;padding:5px 8px;width:auto" onchange="filtrarIngreso()">
+              <option value="">Temporada…</option>
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="limpiarFormIngreso()">↺ Nuevo</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr) 1fr 1fr auto;gap:10px;align-items:end">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Exportadora <span style="color:var(--danger)">*</span></label>
+            <select id="ing-exportadora">
+              <option value="">— Seleccionar —</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Especie <span style="color:var(--danger)">*</span></label>
+            <select id="ing-especie">
+              <option value="">— Seleccionar —</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Mes <span style="color:var(--danger)">*</span></label>
+            <select id="ing-mes">
+              <option value="">— Seleccionar —</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Temporada</label>
+            <input type="text" id="ing-temporada-txt" placeholder="ej: 25/26" maxlength="10">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>USD Packing</label>
+            <input type="number" id="ing-usd-packing" placeholder="0" step="0.01" min="0"
+                   oninput="recalcIngTotal()">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>USD Frío</label>
+            <input type="number" id="ing-usd-frio" placeholder="0" step="0.01" min="0"
+                   oninput="recalcIngTotal()">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding-bottom:1px">
+            <div id="ing-total-badge" style="background:#ede9fe;color:#5b21b6;font-size:11px;
+                  font-weight:700;padding:4px 10px;border-radius:20px;text-align:center;
+                  white-space:nowrap">Total: $0</div>
+            <button class="btn btn-success btn-sm" onclick="guardarIngreso()" id="ing-btn-guardar">
+              💾 Guardar
+            </button>
+          </div>
+        </div>
+        <input type="hidden" id="ing-edit-id" value="">
+        <div id="ing-alert" style="display:none;margin-top:10px"></div>
+      </div>
+
+      <!-- Tabla de ingresos -->
+      <div class="card" style="margin-top:0">
+        <div class="card-title" style="justify-content:space-between">
+          <span id="ing-tabla-titulo">📋 Ingresos Ingresados</span>
+          <div class="flex" style="gap:8px">
+            <select id="ing-filtro-exp" onchange="renderTablaIngreso()" style="font-size:12px;padding:5px 8px;width:auto">
+              <option value="">Todas las exportadoras</option>
+            </select>
+            <select id="ing-filtro-esp" onchange="renderTablaIngreso()" style="font-size:12px;padding:5px 8px;width:auto">
+              <option value="">Todas las especies</option>
+            </select>
+          </div>
+        </div>
+        <div id="ing-tabla-container">
+          <div class="empty-state"><div class="icon">✏️</div>Carga una estimación primero para ver las opciones disponibles</div>
+        </div>
+        <div id="ing-totales-row" style="display:none;margin-top:12px;padding:12px 16px;
+             background:#ede9fe;border-radius:8px;display:flex;gap:24px">
+        </div>
+      </div>
+    </div>
+
     <!-- USUARIOS -->
     <div id="page-usuarios" class="page">
       <div class="grid-2">
@@ -558,7 +642,7 @@ function showPage(page, el) {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   if (el) el.classList.add('active');
-  const titles = {dashboard:'Dashboard',estimacion:'Estimación',tasas:'Tasas de Cambio',usuarios:'Gestión de Usuarios',
+  const titles = {dashboard:'Dashboard',estimacion:'Estimación',ingreso:'Ingreso USD',tasas:'Tasas de Cambio',usuarios:'Gestión de Usuarios',
                   unitarios:'Unitarios (USD)',exportable:'% Exportable',
                   ppto:'Presupuesto',config:'Configuración BD'};
   document.getElementById('page-title').textContent = titles[page]||page;
@@ -569,6 +653,7 @@ function showPage(page, el) {
   if (page==='ppto')        loadPpto();
   if (page==='dashboard')   loadDashboard();
   if (page==='config')      initConfigPage();
+  if (page==='ingreso')     initIngreso();
   if (page==='usuarios')    loadUsuarios();
 }
 
@@ -922,8 +1007,8 @@ function renderTablaEst() {
   if(fEsp) datos=datos.filter(r=>r.especie===fEsp);
   if(!datos.length){ct.innerHTML='<div class="empty-state"><div class="icon">🔍</div>Sin resultados</div>';return;}
   const cv=ag==='mes'?r=>r.mes:r=>r.semana;
-  const ORDEN=[10,11,12,1,2,3,4,5,6,7,8,9];
-  const sort=(a,b)=>ag==='mes'?(ORDEN.indexOf(a)<0?99:ORDEN.indexOf(a))-(ORDEN.indexOf(b)<0?99:ORDEN.indexOf(b)):(a<40?a+100:a)-(b<40?b+100:b);
+  const ORDEN=[11,12,1,2,3,4,5,6,7,8,9,10]; // Temporada Nov→Oct
+  const sort=(a,b)=>ag==='mes'?(ORDEN.indexOf(a)<0?99:ORDEN.indexOf(a))-(ORDEN.indexOf(b)<0?99:ORDEN.indexOf(b)):(a<44?a+100:a)-(b<44?b+100:b); // Semanas 44-52 primero
   const cols=[...new Set(datos.map(cv))].sort(sort);
   const fks=[...new Set(datos.map(r=>`${r.exportadora}||${r.especie}`))].sort();
   const mapa={};
@@ -1076,6 +1161,304 @@ function updateEngineBadge(engine) {
   badge.textContent=(eng.icon||'🗄️')+' '+(eng.label||engine);
 }
 
+
+
+// ════════════════════════════════════════════════════════
+//  INGRESO USD MANUAL
+// ════════════════════════════════════════════════════════
+let _ingOpciones  = { exportadoras:[], especies:[], meses:[], temporadas:[] };
+let _ingData      = [];
+let _ingMeses     = [];
+
+const MESES_NOM_ING = {1:'Enero',2:'Febrero',3:'Marzo',4:'Abril',5:'Mayo',6:'Junio',
+                        7:'Julio',8:'Agosto',9:'Septiembre',10:'Octubre',11:'Noviembre',12:'Diciembre'};
+
+async function initIngreso() {
+  await cargarOpcionesIngreso();
+  await cargarDatosIngreso();
+}
+
+async function cargarOpcionesIngreso() {
+  try {
+    _ingOpciones = await fetch('/api/ingreso/opciones').then(r=>r.json());
+    // Poblar selectores del formulario
+    const selExp = document.getElementById('ing-exportadora');
+    const selEsp = document.getElementById('ing-especie');
+    const selMes = document.getElementById('ing-mes');
+    const selTmp = document.getElementById('ing-temporada');
+
+    selExp.innerHTML = '<option value="">— Seleccionar —</option>';
+    _ingOpciones.exportadoras.forEach(e => selExp.add(new Option(e,e)));
+
+    selEsp.innerHTML = '<option value="">— Seleccionar —</option>';
+    _ingOpciones.especies.forEach(e => selEsp.add(new Option(e,e)));
+
+    // Meses ya vienen ordenados Nov→Oct desde el backend
+    selMes.innerHTML = '<option value="">— Seleccionar —</option>';
+    _ingOpciones.meses.forEach(m => selMes.add(new Option(m.nombre, m.numero)));
+
+    selTmp.innerHTML = '<option value="">Temporada…</option>';
+    _ingOpciones.temporadas.forEach(t => selTmp.add(new Option(t,t)));
+
+    // Poblar filtros de la tabla
+    const fExp = document.getElementById('ing-filtro-exp');
+    const fEsp = document.getElementById('ing-filtro-esp');
+    fExp.innerHTML = '<option value="">Todas las exportadoras</option>';
+    _ingOpciones.exportadoras.forEach(e => fExp.add(new Option(e,e)));
+    fEsp.innerHTML = '<option value="">Todas las especies</option>';
+    _ingOpciones.especies.forEach(e => fEsp.add(new Option(e,e)));
+
+  } catch(e) { console.error('Opciones ingreso:', e); }
+}
+
+async function cargarDatosIngreso() {
+  try {
+    const res = await fetch('/api/ingreso/resumen');
+    const data = await res.json();
+    _ingData  = data.rows  || [];
+    _ingMeses = data.meses || [];
+    renderTablaIngreso();
+  } catch(e) { console.error('Datos ingreso:', e); }
+}
+
+function filtrarIngreso() {
+  renderTablaIngreso();
+}
+
+function renderTablaIngreso() {
+  const ct     = document.getElementById('ing-tabla-container');
+  const fExp   = document.getElementById('ing-filtro-exp').value;
+  const fEsp   = document.getElementById('ing-filtro-esp').value;
+  const fTmp   = document.getElementById('ing-temporada').value;
+
+  let datos = _ingData;
+  if (fExp) datos = datos.filter(r=>r.exportadora===fExp);
+  if (fEsp) datos = datos.filter(r=>r.especie===fEsp);
+  if (fTmp) datos = datos.filter(r=>r.temporada===fTmp);
+
+  // Obtener meses disponibles en orden de temporada
+  // Los meses ya vienen del backend ordenados Nov→Oct
+  const ORDEN_MES = [11,12,1,2,3,4,5,6,7,8,9,10];
+  const mesesDisp = [...new Set(datos.map(r=>r.mes).filter(Boolean))]
+    .sort((a,b) => {
+      const ia = ORDEN_MES.indexOf(a); const ib = ORDEN_MES.indexOf(b);
+      return (ia<0?99:ia) - (ib<0?99:ib);
+    });
+
+  if (!datos.length) {
+    ct.innerHTML = '<div class="empty-state"><div class="icon">✏️</div>No hay ingresos registrados aún. Usa el formulario para agregar.</div>';
+    document.getElementById('ing-totales-row').style.display = 'none';
+    return;
+  }
+
+  // Construir mapa: exportadora+especie+temporada → mes → datos
+  const mapa = {};
+  datos.forEach(r => {
+    const fk = `${r.exportadora}||${r.especie}||${r.temporada||''}`;
+    if (!mapa[fk]) mapa[fk] = { exportadora:r.exportadora, especie:r.especie, temporada:r.temporada, meses:{} };
+    mapa[fk].meses[r.mes] = r;
+  });
+
+  const filaKeys = Object.keys(mapa).sort();
+
+  // Calcular totales por columna
+  const totPack = {}; const totFrio = {}; const totTot = {};
+  mesesDisp.forEach(m => { totPack[m]=0; totFrio[m]=0; totTot[m]=0; });
+  datos.forEach(r => {
+    if (mesesDisp.includes(r.mes)) {
+      totPack[r.mes] = (totPack[r.mes]||0) + (r.usd_packing||0);
+      totFrio[r.mes] = (totFrio[r.mes]||0) + (r.usd_frio||0);
+      totTot[r.mes]  = (totTot[r.mes]||0)  + (r.usd_total||0);
+    }
+  });
+  const grandTotal = Object.values(totTot).reduce((a,b)=>a+b,0);
+
+  // Headers de columnas meses
+  const colHeaders = mesesDisp.map(m =>
+    `<th class="num" colspan="3" style="background:var(--primary-light)">${(MESES_NOM_ING[m]||m+'').substring(0,3).toUpperCase()}</th>`
+  ).join('');
+  const subHeaders = mesesDisp.map(() =>
+    `<th class="num" style="background:#2d6a9f;font-size:10px">Pack.</th>
+     <th class="num" style="background:#1a5276;font-size:10px">Frío</th>
+     <th class="num" style="background:#1a3a5c;font-size:10px">Total</th>`
+  ).join('');
+
+  const filas = filaKeys.map((fk, ri) => {
+    const d = mapa[fk];
+    const shade = ri%2===1;
+    const bg = shade ? 'background:#f8fafc' : '';
+    const celdas = mesesDisp.map(m => {
+      const reg = d.meses[m];
+      const pack = reg ? reg.usd_packing : null;
+      const frio = reg ? reg.usd_frio    : null;
+      const tot  = reg ? reg.usd_total   : null;
+      const rid  = reg ? reg.id          : null;
+      const editBtn = reg
+        ? `onclick="editarIngreso(${reg.id},'${d.exportadora}','${d.especie}',${m},'${d.temporada||''}',${reg.usd_packing},${reg.usd_frio})"`
+        : `onclick="precargarFormIngreso('${d.exportadora}','${d.especie}',${m},'${d.temporada||''}')"`;
+      return `
+        <td class="num" style="${bg};cursor:pointer" ${editBtn} title="Click para editar">
+          ${pack!==null?'$'+fmt(pack,0):'<span style=\"color:#d1d5db\">—</span>'}
+        </td>
+        <td class="num" style="${bg};cursor:pointer" ${editBtn} title="Click para editar">
+          ${frio!==null?'$'+fmt(frio,0):'<span style=\"color:#d1d5db\">—</span>'}
+        </td>
+        <td class="num" style="${bg};cursor:pointer;font-weight:600" ${editBtn} title="Click para editar">
+          ${tot!==null?'$'+fmt(tot,0):'<span style=\"color:#d1d5db\">—</span>'}
+        </td>`;
+    }).join('');
+
+    const rowTotal = mesesDisp.reduce((s,m)=>s+(d.meses[m]?.usd_total||0),0);
+    return `<tr>
+      <td style="${bg};font-weight:600">${d.exportadora}</td>
+      <td style="${bg}">${d.especie}</td>
+      <td style="${bg};font-size:11px;color:var(--muted)">${d.temporada||'—'}</td>
+      ${celdas}
+      <td class="num" style="${bg};font-weight:700;background:#f5f3ff;color:#5b21b6">$${fmt(rowTotal,0)}</td>
+    </tr>`;
+  }).join('');
+
+  const totFilas = `
+    <tr class="tr-total">
+      <td colspan="3"><strong>TOTAL</strong></td>
+      ${mesesDisp.map(m=>`
+        <td class="num">$${fmt(totPack[m],0)}</td>
+        <td class="num">$${fmt(totFrio[m],0)}</td>
+        <td class="num" style="font-weight:700">$${fmt(totTot[m],0)}</td>`).join('')}
+      <td class="num" style="font-weight:700;color:#5b21b6">$${fmt(grandTotal,0)}</td>
+    </tr>`;
+
+  ct.innerHTML = `
+    <div style="margin-bottom:8px;font-size:12px;color:#6b7280">
+      ${datos.length} registros · Gran total: <strong style="color:#5b21b6">$${fmt(grandTotal,0)} USD</strong>
+      <span style="margin-left:8px;font-size:11px;color:#9ca3af">Click en cualquier celda para editar</span>
+    </div>
+    <div class="table-wrap" style="max-height:520px;overflow-y:auto">
+      <table>
+        <thead style="position:sticky;top:0;z-index:2">
+          <tr>
+            <th rowspan="2">Exportadora</th>
+            <th rowspan="2">Especie</th>
+            <th rowspan="2">Temporada</th>
+            ${colHeaders}
+            <th rowspan="2" class="num" style="background:#5b21b6">TOTAL</th>
+          </tr>
+          <tr>${subHeaders}</tr>
+        </thead>
+        <tbody>${filas}</tbody>
+        <tfoot>${totFilas}</tfoot>
+      </table>
+    </div>`;
+
+  // Totales resumen
+  const totRow = document.getElementById('ing-totales-row');
+  totRow.style.display = 'flex';
+  totRow.innerHTML = `
+    <div><span style="font-size:11px;color:#6b7280">USD Packing</span>
+         <div style="font-weight:700;color:#1e40af">$${fmt(Object.values(totPack).reduce((a,b)=>a+b,0),0)}</div></div>
+    <div><span style="font-size:11px;color:#6b7280">USD Frío</span>
+         <div style="font-weight:700;color:#0c4a6e">$${fmt(Object.values(totFrio).reduce((a,b)=>a+b,0),0)}</div></div>
+    <div><span style="font-size:11px;color:#6b7280">USD Total</span>
+         <div style="font-weight:700;font-size:18px;color:#5b21b6">$${fmt(grandTotal,0)}</div></div>`;
+}
+
+function recalcIngTotal() {
+  const pk = parseFloat(document.getElementById('ing-usd-packing').value)||0;
+  const fr = parseFloat(document.getElementById('ing-usd-frio').value)||0;
+  document.getElementById('ing-total-badge').textContent = 'Total: $'+fmt(pk+fr,2);
+}
+
+function precargarFormIngreso(exp, esp, mes, tmp) {
+  document.getElementById('ing-exportadora').value    = exp;
+  document.getElementById('ing-especie').value        = esp;
+  document.getElementById('ing-mes').value            = mes;
+  document.getElementById('ing-temporada-txt').value  = tmp;
+  document.getElementById('ing-usd-packing').value    = '';
+  document.getElementById('ing-usd-frio').value       = '';
+  document.getElementById('ing-edit-id').value        = '';
+  document.getElementById('ing-total-badge').textContent = 'Total: $0';
+  document.getElementById('ing-btn-guardar').textContent = '💾 Guardar';
+  // Scroll al formulario
+  document.querySelector('#page-ingreso .card').scrollIntoView({behavior:'smooth'});
+}
+
+function editarIngreso(id, exp, esp, mes, tmp, pack, frio) {
+  document.getElementById('ing-exportadora').value    = exp;
+  document.getElementById('ing-especie').value        = esp;
+  document.getElementById('ing-mes').value            = mes;
+  document.getElementById('ing-temporada-txt').value  = tmp;
+  document.getElementById('ing-usd-packing').value    = pack;
+  document.getElementById('ing-usd-frio').value       = frio;
+  document.getElementById('ing-edit-id').value        = id;
+  document.getElementById('ing-btn-guardar').textContent = '💾 Actualizar';
+  recalcIngTotal();
+  document.querySelector('#page-ingreso .card').scrollIntoView({behavior:'smooth'});
+}
+
+function limpiarFormIngreso() {
+  ['ing-exportadora','ing-especie','ing-mes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('ing-temporada-txt').value = '';
+  document.getElementById('ing-usd-packing').value   = '';
+  document.getElementById('ing-usd-frio').value      = '';
+  document.getElementById('ing-edit-id').value       = '';
+  document.getElementById('ing-total-badge').textContent = 'Total: $0';
+  document.getElementById('ing-btn-guardar').textContent = '💾 Guardar';
+}
+
+async function guardarIngreso() {
+  const exp = document.getElementById('ing-exportadora').value;
+  const esp = document.getElementById('ing-especie').value;
+  const mes = document.getElementById('ing-mes').value;
+  const tmp = document.getElementById('ing-temporada-txt').value.trim();
+  const pk  = document.getElementById('ing-usd-packing').value;
+  const fr  = document.getElementById('ing-usd-frio').value;
+
+  if (!exp) { showIngAlert('Selecciona la exportadora','error'); return; }
+  if (!esp) { showIngAlert('Selecciona la especie','error'); return; }
+  if (!mes) { showIngAlert('Selecciona el mes','error'); return; }
+
+  const payload = {
+    temporada:    tmp,
+    exportadora:  exp,
+    especie:      esp,
+    mes:          parseInt(mes),
+    usd_packing:  parseFloat(pk)||0,
+    usd_frio:     parseFloat(fr)||0,
+  };
+
+  const btn = document.getElementById('ing-btn-guardar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    const data = await fetch('/api/ingreso', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    }).then(r=>r.json());
+
+    if (data.ok) {
+      showIngAlert(`Guardado correctamente. USD Total: $${fmt(data.usd_total,2)}`, 'success');
+      limpiarFormIngreso();
+      await cargarDatosIngreso();
+    } else {
+      showIngAlert(data.error||'Error al guardar','error');
+    }
+  } catch(e) {
+    showIngAlert('Error de conexión: '+e,'error');
+  }
+  btn.disabled = false;
+  btn.textContent = '💾 Guardar';
+}
+
+function showIngAlert(msg, type='success') {
+  const el = document.getElementById('ing-alert');
+  el.innerHTML = `<div class="alert alert-${type==='error'?'error':'success'}">${msg}</div>`;
+  el.style.display = 'block';
+  setTimeout(()=>{ el.style.display='none'; }, 4000);
+}
 
 // ════════════════════════════════════════════════════════
 //  USUARIOS

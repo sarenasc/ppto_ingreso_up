@@ -1,12 +1,8 @@
 """
-services/calculos.py — Lógica de cálculo de presupuesto.
+services/calculos.py — Logica de calculo de presupuesto.
 
-Contiene:
-  - Constantes de meses
-  - get_tasa_for_row()  → busca la tasa CLP/USD con la prioridad correcta
-  - calcular_fila()     → calcula todos los valores derivados de una fila
-  - load_calc_data()    → carga estimación + parámetros desde BD
-  - next_version()      → siguiente número de versión
+Temporada agricola: Nov → Oct  (meses 11,12,1,2,3,4,5,6,7,8,9,10)
+                    Semanas 44→52, luego 1→43
 """
 
 from datetime import datetime
@@ -21,10 +17,28 @@ MESES_NOMBRE: dict[int, str] = {
 }
 MESES_ABREV: dict[int, str] = {k: v[:3].upper() for k, v in MESES_NOMBRE.items()}
 
+# Orden de temporada agricola Nov → Oct
+ORDEN_MESES_TEMPORADA: list[int] = [11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+def sort_mes_temporada(mes: int) -> int:
+    """Devuelve el indice de ordenamiento de temporada para un mes."""
+    try:
+        return ORDEN_MESES_TEMPORADA.index(mes)
+    except ValueError:
+        return 99
+
+def sort_semana_temporada(semana: int) -> int:
+    """
+    Semanas de temporada Nov-Oct:
+    Semana 44-52 primero (inicio temporada), luego 1-43.
+    """
+    if semana is None:
+        return 999
+    return semana if semana >= 44 else semana + 100
+
 
 # ── Helpers de BD ─────────────────────────────────────────────────────
 def next_version() -> int:
-    """Devuelve el siguiente número de versión de estimación."""
     schema = CFG['DB_SCHEMA']
     db     = get_db()
     with db.get_conn() as conn:
@@ -37,13 +51,6 @@ def next_version() -> int:
 
 
 def load_calc_data() -> tuple[list, list, dict, dict]:
-    """
-    Carga desde BD:
-      rows       → filas de ppto_estimacion
-      tasas      → tasas de cambio activas
-      unitarios  → {especie: {packing: x, frio: y}}
-      exportable → {especie: porcentaje_decimal}
-    """
     schema = CFG['DB_SCHEMA']
     db     = get_db()
     with db.get_conn() as conn:
@@ -74,20 +81,8 @@ def load_calc_data() -> tuple[list, list, dict, dict]:
     return rows, tasas, unitarios, exportable
 
 
-# ── Cálculo de tasa ───────────────────────────────────────────────────
-def get_tasa_for_row(
-    tasas: list[dict],
-    fecha_str,
-    semana,
-    mes,
-    moneda: str = 'CLP',
-) -> float | None:
-    """
-    Busca la tasa de cambio aplicable con orden de prioridad:
-      rango > semanal > mensual > anual
-
-    Filtra por moneda antes de buscar.
-    """
+# ── Calculo de tasa ───────────────────────────────────────────────────
+def get_tasa_for_row(tasas, fecha_str, semana, mes, moneda='CLP'):
     tasas_m = [t for t in tasas if (t.get('moneda') or 'CLP').upper() == moneda.upper()]
 
     fecha = None
@@ -119,30 +114,8 @@ def get_tasa_for_row(
     return None
 
 
-# ── Cálculo de una fila ───────────────────────────────────────────────
-def calcular_fila(
-    row: dict,
-    unitarios: dict,
-    exportable: dict,
-    tasas: list,
-    moneda: str = 'CLP',
-) -> dict:
-    """
-    Calcula todos los valores derivados de una fila de estimación.
-
-    Retorna:
-      kgs            → kilos a procesar
-      pct            → % exportable (decimal)
-      kg_export      → kgs × pct
-      precio_packing → USD/kg (packing)
-      precio_frio    → USD/kg (frío)
-      usd_packing    → kgs × precio_packing
-      usd_frio       → kg_export × precio_frio
-      usd_total      → usd_packing + usd_frio
-      tasa           → unidades de moneda por 1 USD (o None si no hay tasa)
-      clp_total      → usd_total × tasa (valor en la moneda seleccionada)
-      moneda         → moneda usada en el cálculo
-    """
+# ── Calculo de una fila ───────────────────────────────────────────────
+def calcular_fila(row, unitarios, exportable, tasas, moneda='CLP'):
     esp    = row.get('especie') or ''
     kgs    = float(row.get('kgs_a_proc') or 0)
     semana = row.get('semana')

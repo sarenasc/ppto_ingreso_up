@@ -6,7 +6,7 @@ Función principal: build_excel() → BytesIO listo para send_file().
 
 import io
 import xlsxwriter
-from services.calculos import calcular_fila, MESES_ABREV, MESES_NOMBRE
+from services.calculos import calcular_fila, MESES_ABREV, MESES_NOMBRE, sort_mes_temporada
 
 
 def build_excel(
@@ -64,7 +64,7 @@ def build_excel(
         m['upk'] += c['usd_packing']; m['ufr'] += c['usd_frio']
         m['ut']  += c['usd_total'];   m['mon'] += c['clp_total']
 
-    all_meses = sorted({mes for v in data_map.values() for mes in v})
+    all_meses = sorted({mes for v in data_map.values() for mes in v}, key=sort_mes_temporada)
     especies  = sorted(data_map.keys())
     n         = len(all_meses)
 
