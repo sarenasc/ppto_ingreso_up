@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Presupuesto de Ingresos</title>
+<style>
+  :root {
+    --primary: #1a3a5c; --primary-light: #2d6a9f; --accent: #e67e22;
+    --accent2: #27ae60; --bg: #f0f4f8; --white: #ffffff;
+    --border: #d1dbe8; --text: #2c3e50; --muted: #7f8c8d;
+    --danger: #e74c3c; --shadow: 0 2px 8px rgba(0,0,0,0.1); --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* SIDEBAR */
+  .sidebar { width: 220px; background: var(--primary); display: flex; flex-direction: column; flex-shrink: 0; }
+  .sidebar-logo { padding: 20px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .sidebar-logo h2 { color: white; font-size: 14px; font-weight: 700; line-height: 1.4; }
+  .sidebar-logo span { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+              color: rgba(255,255,255,0.75); cursor: pointer; transition: all 0.2s;
+              text-decoration: none; font-size: 13px; }
+  .nav-item:hover, .nav-item.active { background: rgba(255,255,255,0.1); color: white; }
+  .nav-item.active { border-left: 3px solid var(--accent); }
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+  .nav-section { padding: 16px 16px 6px; color: rgba(255,255,255,0.4);
+                 font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* MAIN */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { background: white; border-bottom: 1px solid var(--border); padding: 14px 24px;
+            display: flex; align-items: center; justify-content: space-between; box-shadow: var(--shadow); }
+  .topbar h1 { font-size: 16px; font-weight: 600; color: var(--primary); }
+  .version-badge { background: var(--primary-light); color: white;
+                   padding: 4px 10px; border-radius: 20px; font-size: 11px; }
+  .engine-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px;
+                  font-weight: 700; cursor: pointer; transition: opacity .2s; }
+  .engine-badge:hover { opacity: .8; }
+  .engine-sqlserver  { background: #dbeafe; color: #1e40af; }
+  .engine-postgresql { background: #d1fae5; color: #065f46; }
+  .engine-mysql      { background: #ffedd5; color: #9a3412; }
+  .content { flex: 1; overflow-y: auto; padding: 24px; }
+
+  /* CARDS */
+  .card { background: white; border-radius: var(--radius); box-shadow: var(--shadow);
+          padding: 20px; margin-bottom: 20px; }
+  .card-title { font-size: 15px; font-weight: 600; color: var(--primary);
+                margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+
+  /* KPI */
+  .kpi { background: white; border-radius: var(--radius); box-shadow: var(--shadow);
+         padding: 16px 20px; border-left: 4px solid var(--primary-light); }
+  .kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .kpi-value { font-size: 24px; font-weight: 700; color: var(--primary); margin: 4px 0; }
+  .kpi-sub   { font-size: 11px; color: var(--muted); }
+  .kpi.green { border-left-color: var(--accent2); }
+  .kpi.orange{ border-left-color: var(--accent); }
+  .kpi.red   { border-left-color: var(--danger); }
+
+  /* FORMS */
+  .form-group { margin-bottom: 14px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 5px; }
+  input, select, textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px; outline: none; transition: border .2s; background: white; }
+  input:focus, select:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(45,106,159,.1); }
+  textarea { resize: vertical; min-height: 60px; }
+
+  /* BUTTONS */
+  .btn { padding: 9px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px;
+         font-weight: 600; transition: all .2s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-light); }
+  .btn-success { background: var(--accent2); color: white; }
+  .btn-success:hover { background: #219a52; }
+  .btn-warning { background: var(--accent); color: white; }
+  .btn-warning:hover { background: #d35400; }
+  .btn-danger  { background: var(--danger); color: white; }
+  .btn-danger:hover { background: #c0392b; }
+  .btn-outline { background: white; color: var(--primary); border: 1px solid var(--primary-light); }
+  .btn-outline:hover { background: var(--bg); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-xs { padding: 3px 8px; font-size: 11px; }
+
+  /* TABLES */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--primary); color: white; padding: 10px 12px; text-align: left;
+       font-weight: 600; position: sticky; top: 0; white-space: nowrap; }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: rgba(45,106,159,.04); }
+  .tr-total td { background: #fff3cd; font-weight: 700; }
+
+  /* UPLOAD */
+  .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 30px; text-align: center; cursor: pointer; transition: all .2s; }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--primary-light); background: rgba(45,106,159,.05); }
+  .upload-zone p { color: var(--muted); margin-top: 8px; font-size: 13px; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
+  .tab { padding: 8px 16px; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 13px;
+         color: var(--muted); font-weight: 500; transition: all .2s; }
+  .tab:hover { color: var(--primary); background: rgba(0,0,0,.03); }
+  .tab.active { color: var(--primary); border-bottom: 2px solid var(--primary);
+                margin-bottom: -2px; font-weight: 700; }
+
+  /* MISC */
+  .page { display: none; } .page.active { display: block; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-blue   { background: #dbeafe; color: #1e40af; }
+  .badge-green  { background: #d1fae5; color: #065f46; }
+  .badge-orange { background: #ffedd5; color: #9a3412; }
+  .alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+  .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+  .alert-error   { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+  .alert-info    { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+  .alert-warning { background: #fffbeb; color: #92400e; border: 1px solid #fcd34d; }
+  .num { text-align: right; }
+  .text-muted  { color: var(--muted); }
+  .text-green  { color: var(--accent2); font-weight: 600; }
+  .text-orange { color: var(--accent);  font-weight: 600; }
+  .flex        { display: flex; align-items: center; gap: 8px; }
+  .flex-between{ display: flex; align-items: center; justify-content: space-between; }
+  .tip { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .spinner { display: inline-block; width: 16px; height: 16px;
+             border: 2px solid rgba(255,255,255,.4); border-top-color: white;
+             border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty-state { text-align: center; padding: 40px; color: var(--muted); }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+  .tag-tipo    { font-size: 10px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; font-weight: 700; }
+  .tag-anual   { background: #ede9fe; color: #5b21b6; }
+  .tag-mensual { background: #dbeafe; color: #1e40af; }
+  .tag-semanal { background: #d1fae5; color: #065f46; }
+  .tag-rango   { background: #ffedd5; color: #9a3412; }
+
+  /* Moneda selector */
+  .moneda-selector { display: flex; align-items: center; gap: 8px; }
+  .moneda-selector label { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0; white-space: nowrap; }
+  .moneda-selector select { width: auto; padding: 5px 28px 5px 10px; font-size: 12px; font-weight: 700;
+                             border-color: var(--border); border-radius: 20px; background: var(--bg); }
+
+  /* Botón descarga */
+  .btn-download { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+                  border-radius: 6px; font-size: 12px; font-weight: 600;
+                  background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7;
+                  cursor: pointer; text-decoration: none; transition: all .2s; }
+  .btn-download:hover { background: #a7f3d0; }
+
+  /* Configuración BD */
+  .engine-card { border: 2px solid var(--border); border-radius: 10px; padding: 16px;
+                 cursor: pointer; transition: all .2s; text-align: center; }
+  .engine-card:hover { border-color: var(--primary-light); background: rgba(45,106,159,.04); }
+  .engine-card.selected { border-color: var(--primary); background: rgba(45,106,159,.06); }
+  .engine-card .icon { font-size: 28px; margin-bottom: 6px; }
+  .engine-card .name { font-weight: 700; font-size: 13px; color: var(--primary); }
+  .engine-card .port { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .conn-status { display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+                 border-radius: 8px; font-size: 13px; font-weight: 600; }
+  .conn-ok   { background: #d1fae5; color: #065f46; }
+  .conn-fail { background: #fee2e2; color: #991b1b; }
+  .conn-idle { background: #f3f4f6; color: #6b7280; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h2>🍋 Sistema de<br>Presupuesto</h2>
+    <span>Ingresos Estimados</span>
+  </div>
+  <div style="overflow-y:auto;flex:1;">
+    <div class="nav-section">Principal</div>
+    <a class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon">📊</span> Dashboard</a>
+    <div class="nav-section">Datos</div>
+    <a class="nav-item" onclick="showPage('estimacion',this)"><span class="nav-icon">📤</span> Estimación</a>
+    <div class="nav-section">Parámetros</div>
+    <a class="nav-item" onclick="showPage('tasas',this)"><span class="nav-icon">💱</span> Tasas de Cambio</a>
+    <a class="nav-item" onclick="showPage('unitarios',this)"><span class="nav-icon">💰</span> Unitarios (USD)</a>
+    <a class="nav-item" onclick="showPage('exportable',this)"><span class="nav-icon">📦</span> % Exportable</a>
+    <div class="nav-section">Resultados</div>
+    <a class="nav-item" onclick="showPage('ppto',this)"><span class="nav-icon">📈</span> Presupuesto</a>
+    <div class="nav-section">Sistema</div>
+    <a class="nav-item" onclick="showPage('config',this)"><span class="nav-icon">⚙️</span> Configuración BD</a>
+    <div style="padding:16px;margin-top:auto;">
+      <button class="btn btn-warning" style="width:100%" onclick="exportarExcel()">⬇️ Exportar Excel</button>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <h1 id="page-title">Dashboard</h1>
+    <div class="flex" style="gap:12px">
+      <span class="text-muted" id="topbar-info" style="font-size:12px"></span>
+      <!-- Motor activo -->
+      <span id="engine-badge" class="engine-badge engine-sqlserver"
+            onclick="showPage('config', document.querySelector('[onclick*=config]'))"
+            title="Click para cambiar motor de BD">🗄️ SQL Server</span>
+      <!-- Selector moneda -->
+      <div class="moneda-selector">
+        <label>💱</label>
+        <select id="selector-moneda" onchange="onMonedaChange()">
+          <option value="CLP">CLP</option>
+        </select>
+      </div>
+      <span class="version-badge" id="version-badge">Sin datos</span>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="global-alert" style="display:none"></div>
+
+    <!-- ══════════════ DASHBOARD ══════════════ -->
+    <div id="page-dashboard" class="page active">
+      <div class="grid-3" style="margin-bottom:20px">
+        <div class="kpi"><div class="kpi-label">Total Kgs a Proc</div><div class="kpi-value" id="kpi-kgs">—</div><div class="kpi-sub">Temporada completa</div></div>
+        <div class="kpi green"><div class="kpi-label">Kg Exportación</div><div class="kpi-value" id="kpi-kgexp">—</div><div class="kpi-sub">Después de % exportable</div></div>
+        <div class="kpi" style="border-left-color:#2563eb"><div class="kpi-label">USD Packing</div><div class="kpi-value" id="kpi-usd-pk" style="color:#1e40af">—</div><div class="kpi-sub">Kgs Proc × P.Unit Packing</div></div>
+        <div class="kpi" style="border-left-color:#0284c7"><div class="kpi-label">USD Frío</div><div class="kpi-value" id="kpi-usd-fr" style="color:#0c4a6e">—</div><div class="kpi-sub">Kg Export × P.Unit Frío</div></div>
+        <div class="kpi orange"><div class="kpi-label">USD Total</div><div class="kpi-value" id="kpi-usd">—</div><div class="kpi-sub">Packing + Frío</div></div>
+        <div class="kpi red"><div class="kpi-label">Ingreso <span id="kpi-mon-lbl">CLP</span></div><div class="kpi-value" id="kpi-clp">—</div><div class="kpi-sub">USD Total × Tasa</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card"><div class="card-title">📅 Por Mes</div><div id="dash-mes-table"><div class="empty-state"><div class="icon">📊</div>Carga una estimación para ver datos</div></div></div>
+        <div class="card"><div class="card-title">🍋 Por Especie</div><div id="dash-esp-table"><div class="empty-state"><div class="icon">🌿</div>Carga una estimación para ver datos</div></div></div>
+      </div>
+    </div>
+
+    <!-- ══════════════ ESTIMACIÓN ══════════════ -->
+    <div id="page-estimacion" class="page">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">📤 Cargar Nueva Estimación</div>
+          <div id="div-download-ultimo" style="display:none;margin-bottom:14px">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;
+                        background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
+              <span style="font-size:18px">📥</span>
+              <div style="flex:1">
+                <div style="font-size:12px;font-weight:600;color:#065f46">Última estimación cargada</div>
+                <div style="font-size:11px;color:#6b7280" id="lbl-ultimo-archivo">—</div>
+              </div>
+              <a href="/api/estimacion/download-ultimo" class="btn-download" download>⬇️ Descargar</a>
+            </div>
+          </div>
+          <div id="upload-zone" class="upload-zone" onclick="document.getElementById('file-input').click()"
+               ondragover="event.preventDefault();this.classList.add('drag')"
+               ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
+            <div style="font-size:36px">📁</div>
+            <strong>Haz clic o arrastra el archivo Excel</strong>
+            <p>Formato: .xlsx — columnas estándar</p>
+          </div>
+          <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="fileSelected(this)">
+          <div id="selected-file" style="margin-top:12px;display:none" class="alert alert-info"></div>
+          <div class="form-group" style="margin-top:14px">
+            <label>Observación</label>
+            <textarea id="observacion" placeholder="Ej: Actualización semanal 15/03..."></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="uploadFile()" id="upload-btn">📤 Subir Estimación</button>
+        </div>
+        <div class="card">
+          <div class="card-title">🕑 Historial de Versiones</div>
+          <div id="versions-table"><div class="empty-state"><div class="icon">📜</div>Sin versiones</div></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:0">
+        <div class="card-title" style="justify-content:space-between">
+          <span>📋 Tabla Dinámica — Kgs a Procesar</span>
+          <div class="flex" style="gap:8px;flex-wrap:wrap">
+            <select id="td-agrupar" onchange="loadTablaEst()" style="font-size:12px;padding:5px 8px;width:auto"><option value="mes">Por Mes</option><option value="semana">Por Semana</option></select>
+            <select id="td-exportadora" onchange="loadTablaEst()" style="font-size:12px;padding:5px 8px;width:auto"><option value="">Todas las exportadoras</option></select>
+            <select id="td-especie" onchange="loadTablaEst()" style="font-size:12px;padding:5px 8px;width:auto"><option value="">Todas las especies</option></select>
+            <button class="btn btn-outline btn-sm" onclick="resetFiltrosTablaEst()">↺ Reset</button>
+          </div>
+        </div>
+        <div id="tabla-est-container"><div class="empty-state"><div class="icon">📋</div>Carga una estimación para ver la tabla dinámica</div></div>
+      </div>
+    </div>
+
+    <!-- ══════════════ TASAS ══════════════ -->
+    <div id="page-tasas" class="page">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">➕ Agregar Tasa de Cambio</div>
+          <div class="form-group">
+            <label>Moneda <span style="color:var(--danger)">*</span></label>
+            <div class="flex" style="gap:0">
+              <input type="text" id="t-moneda" placeholder="CLP, USD, EUR, TRY…" maxlength="10"
+                     value="CLP" style="border-radius:6px 0 0 6px;text-transform:uppercase;font-weight:700"
+                     oninput="this.value=this.value.toUpperCase()">
+              <span style="padding:8px 12px;background:#f8fafc;border:1px solid var(--border);
+                           border-left:none;border-radius:0 6px 6px 0;color:var(--muted);font-size:11px;white-space:nowrap">por 1 USD</span>
+            </div>
+            <p class="tip">Ej: 950 CLP = 1 USD → moneda: CLP, valor: 950</p>
+          </div>
+          <div class="form-group">
+            <label>Nombre / Descripción</label>
+            <input type="text" id="t-nombre" placeholder="Ej: Tasa Mayo 2026">
+          </div>
+          <div class="form-group">
+            <label>Tipo de Aplicación</label>
+            <select id="t-tipo" onchange="updateTasaForm()">
+              <option value="anual">Anual</option>
+              <option value="mensual">Mensual</option>
+              <option value="semanal">Semanal</option>
+              <option value="rango">Rango de Fechas</option>
+            </select>
+            <p class="tip">Prioridad: Rango > Semanal > Mensual > Anual</p>
+          </div>
+          <div class="form-group">
+            <label>Valor (unidades de moneda por 1 USD)</label>
+            <input type="number" id="t-valor" placeholder="Ej: 950" step="0.01">
+          </div>
+          <div id="f-anio"   class="form-group" style="display:none"><label>Año</label><input type="number" id="t-anio" placeholder="2026"></div>
+          <div id="f-mes"    class="form-group" style="display:none">
+            <label>Mes</label>
+            <select id="t-mes"><option value="">— Seleccionar —</option><option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option><option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option></select>
+          </div>
+          <div id="f-semana" class="form-group" style="display:none"><label>Semana</label><input type="number" id="t-semana" placeholder="Ej: 21" min="1" max="53"></div>
+          <div id="f-rango"  style="display:none">
+            <div class="form-group"><label>Fecha Inicio</label><input type="date" id="t-fi"></div>
+            <div class="form-group"><label>Fecha Fin</label><input type="date" id="t-ff"></div>
+          </div>
+          <button class="btn btn-success" onclick="addTasa()">💱 Agregar Tasa</button>
+        </div>
+        <div class="card">
+          <div class="card-title">📋 Tasas Configuradas</div>
+          <div id="tasas-list"><div class="empty-state"><div class="icon">💱</div>Sin tasas</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ UNITARIOS ══════════════ -->
+    <div id="page-unitarios" class="page">
+      <div class="card">
+        <div class="card-title">💰 Precios Unitarios por Especie (USD/kg)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div style="background:#dbeafe;border-radius:8px;padding:12px;border-left:4px solid #2d6a9f">
+            <div style="font-weight:700;color:#1e40af;margin-bottom:4px">💼 USD Packing</div>
+            <div style="font-size:12px;color:#1e3a5f">= Kgs a Proc × Precio Packing</div>
+          </div>
+          <div style="background:#e0f2fe;border-radius:8px;padding:12px;border-left:4px solid #0284c7">
+            <div style="font-weight:700;color:#0c4a6e;margin-bottom:4px">❄️ USD Frío</div>
+            <div style="font-size:12px;color:#0c4a6e">= Kg Export × Precio Frío</div>
+          </div>
+        </div>
+        <div id="unitarios-form"><div class="empty-state"><div class="icon">🍋</div>Carga una estimación primero</div></div>
+        <div style="margin-top:16px"><button class="btn btn-success" onclick="saveUnitarios()">💾 Guardar Precios</button></div>
+      </div>
+    </div>
+
+    <!-- ══════════════ % EXPORTABLE ══════════════ -->
+    <div id="page-exportable" class="page">
+      <div class="card">
+        <div class="card-title">📦 % Exportable por Especie</div>
+        <p class="text-muted" style="margin-bottom:16px;font-size:13px">% de kilos procesados que se exportan. Ej: 80 = 80%.</p>
+        <div id="exportable-form"><div class="empty-state"><div class="icon">📦</div>Carga una estimación primero</div></div>
+        <div style="margin-top:16px"><button class="btn btn-success" onclick="saveExportable()">💾 Guardar Porcentajes</button></div>
+      </div>
+    </div>
+
+    <!-- ══════════════ PRESUPUESTO ══════════════ -->
+    <div id="page-ppto" class="page">
+      <div class="flex-between" style="margin-bottom:16px">
+        <div class="tabs" style="margin-bottom:0">
+          <div class="tab active" onclick="setPptoView('mes',this)">Por Mes</div>
+          <div class="tab" onclick="setPptoView('semana',this)">Por Semana</div>
+          <div class="tab" onclick="setPptoView('especie',this)">Por Especie</div>
+        </div>
+        <button class="btn btn-warning" onclick="exportarExcel()">⬇️ Exportar Excel</button>
+      </div>
+      <div class="card">
+        <div class="card-title" id="ppto-card-title">📈 Presupuesto por Mes</div>
+        <div id="ppto-table"><div class="empty-state"><div class="icon">📈</div>Configura los parámetros para ver el presupuesto</div></div>
+      </div>
+    </div>
+
+    <!-- ══════════════ CONFIGURACIÓN BD ══════════════ -->
+    <div id="page-config" class="page">
+
+      <!-- Selector de motor -->
+      <div class="card">
+        <div class="card-title">🗄️ Motor de Base de Datos</div>
+        <p class="text-muted" style="margin-bottom:16px;font-size:13px">
+          Selecciona el motor que usará la aplicación. Los cambios se guardan en el archivo <code>.env</code>
+          y se aplican de inmediato sin reiniciar el servidor.
+        </p>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px" id="engine-cards"></div>
+        <div id="conn-status-box" class="conn-status conn-idle">⬤ &nbsp;Selecciona un motor y completa los datos para probar la conexión</div>
+      </div>
+
+      <!-- Formulario de conexión -->
+      <div class="card">
+        <div class="card-title">🔌 Datos de Conexión</div>
+
+        <div class="field-row">
+          <div class="form-group">
+            <label>Servidor / Host</label>
+            <input type="text" id="cfg-server" placeholder="localhost o IP">
+          </div>
+          <div class="form-group">
+            <label>Puerto <span class="text-muted" id="cfg-port-hint" style="font-weight:400">(1433)</span></label>
+            <input type="text" id="cfg-port" placeholder="dejar vacío = default">
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="form-group">
+            <label>Base de Datos</label>
+            <input type="text" id="cfg-database" placeholder="PptoBD">
+          </div>
+          <div class="form-group">
+            <label id="cfg-schema-label">Schema</label>
+            <input type="text" id="cfg-schema" placeholder="dbo">
+          </div>
+        </div>
+
+        <!-- Windows Auth (solo SQL Server) -->
+        <div id="cfg-winauth-row" class="form-group">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cfg-winauth" style="width:auto"
+                   onchange="toggleWinAuth(this.checked)">
+            Usar Windows Authentication (SQL Server)
+          </label>
+        </div>
+
+        <div id="cfg-creds-row">
+          <div class="field-row">
+            <div class="form-group">
+              <label>Usuario</label>
+              <input type="text" id="cfg-user" placeholder="sa">
+            </div>
+            <div class="form-group">
+              <label>Contraseña</label>
+              <input type="password" id="cfg-password" placeholder="••••••••">
+            </div>
+          </div>
+        </div>
+
+        <!-- Driver (solo SQL Server) -->
+        <div id="cfg-driver-row" class="form-group">
+          <label>ODBC Driver</label>
+          <select id="cfg-driver">
+            <option value="ODBC Driver 17 for SQL Server">ODBC Driver 17 for SQL Server</option>
+            <option value="ODBC Driver 18 for SQL Server">ODBC Driver 18 for SQL Server</option>
+          </select>
+        </div>
+
+        <div class="flex" style="gap:10px;margin-top:4px">
+          <button class="btn btn-outline" onclick="testConexion()">🔍 Probar Conexión</button>
+          <button class="btn btn-success" onclick="guardarConfig()">💾 Guardar y Aplicar</button>
+        </div>
+      </div>
+
+      <!-- Puerto Flask -->
+      <div class="card">
+        <div class="card-title">🚀 Puerto del Servidor Flask</div>
+        <div style="max-width:200px">
+          <div class="form-group">
+            <label>Puerto</label>
+            <input type="number" id="cfg-flask-port" placeholder="5050" min="1024" max="65535">
+          </div>
+        </div>
+        <p class="tip">Requiere reiniciar el servidor Python para que el cambio de puerto tome efecto.</p>
+        <div style="margin-top:12px">
+          <button class="btn btn-primary btn-sm" onclick="guardarConfig()">💾 Guardar Puerto</button>
+        </div>
+      </div>
+
+    </div><!-- /page-config -->
+
+  </div><!-- content -->
+</div><!-- main -->
+</div><!-- layout -->
+
+<script>
+// ════════════════════════════════════════════════════════
+//  ESTADO GLOBAL
+// ════════════════════════════════════════════════════════
+let monedaActual     = localStorage.getItem('ppto_moneda') || 'CLP';
+let currentPptoView  = 'mes';
+let selectedFile     = null;
+let _engines         = {};
+let _selectedEngine  = 'sqlserver';
+
+// ── Formateo ──────────────────────────────────────────
+function fmt(n, d=0) {
+  if (n==null||isNaN(n)) return '—';
+  return new Intl.NumberFormat('es-CL',{maximumFractionDigits:d,minimumFractionDigits:d}).format(n);
+}
+function fmtUSD(n) { return n==null||isNaN(n)?'—':'$'+fmt(n,2); }
+function fmtMon(n) { return n==null||isNaN(n)?'—':fmt(n); }
+
+// ── Alertas ───────────────────────────────────────────
+function showAlert(msg, type='success') {
+  const el = document.getElementById('global-alert');
+  el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+  el.style.display = 'block';
+  setTimeout(()=>{ el.style.display='none'; }, 4500);
+}
+
+// ── Navegación ────────────────────────────────────────
+function showPage(page, el) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  if (el) el.classList.add('active');
+  const titles = {dashboard:'Dashboard',estimacion:'Estimación',tasas:'Tasas de Cambio',
+                  unitarios:'Unitarios (USD)',exportable:'% Exportable',
+                  ppto:'Presupuesto',config:'Configuración BD'};
+  document.getElementById('page-title').textContent = titles[page]||page;
+  if (page==='estimacion')  { loadVersions(); loadTablaEst(); }
+  if (page==='tasas')       loadTasas();
+  if (page==='unitarios')   loadUnitarios();
+  if (page==='exportable')  loadExportable();
+  if (page==='ppto')        loadPpto();
+  if (page==='dashboard')   loadDashboard();
+  if (page==='config')      initConfigPage();
+}
+
+// ════════════════════════════════════════════════════════
+//  MONEDA
+// ════════════════════════════════════════════════════════
+async function cargarMonedasSelector() {
+  try {
+    const monedas = await fetch('/api/tasas/monedas').then(r=>r.json());
+    const sel = document.getElementById('selector-moneda');
+    sel.innerHTML = '';
+    monedas.forEach(m => {
+      const o = new Option(m, m);
+      if (m===monedaActual) o.selected=true;
+      sel.appendChild(o);
+    });
+    if (!monedas.includes(monedaActual) && monedas.length>0) {
+      monedaActual = monedas[0]; sel.value=monedaActual;
+      localStorage.setItem('ppto_moneda', monedaActual);
+    }
+  } catch(e) { console.warn('Monedas:', e); }
+}
+
+function onMonedaChange() {
+  monedaActual = document.getElementById('selector-moneda').value;
+  localStorage.setItem('ppto_moneda', monedaActual);
+  document.getElementById('kpi-mon-lbl').textContent = monedaActual;
+  loadDashboard();
+  if (document.getElementById('page-ppto').classList.contains('active')) loadPpto();
+}
+
+// ════════════════════════════════════════════════════════
+//  UPLOAD / ESTIMACIÓN
+// ════════════════════════════════════════════════════════
+function fileSelected(input) {
+  if (input.files[0]) {
+    selectedFile = input.files[0];
+    const el = document.getElementById('selected-file');
+    el.style.display='block';
+    el.innerHTML=`📄 Archivo: <strong>${selectedFile.name}</strong>`;
+  }
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) { selectedFile=f; fileSelected({files:[f]}); }
+}
+async function uploadFile() {
+  if (!selectedFile) { showAlert('Selecciona un archivo primero','error'); return; }
+  const obs = document.getElementById('observacion').value;
+  if (!obs.trim()) { showAlert('Ingresa una observación','error'); return; }
+  const btn = document.getElementById('upload-btn');
+  btn.innerHTML='<span class="spinner"></span> Subiendo...'; btn.disabled=true;
+  const fd = new FormData();
+  fd.append('file', selectedFile); fd.append('observacion', obs);
+  try {
+    const data = await fetch('/api/estimacion/upload',{method:'POST',body:fd}).then(r=>r.json());
+    if (data.ok) {
+      showAlert(`✅ Versión ${data.version} cargada — ${data.filas} filas.`);
+      document.getElementById('version-badge').textContent=`v${data.version}`;
+      loadVersions(); loadDashboard();
+      document.getElementById('td-exportadora').innerHTML='<option value="">Todas las exportadoras</option>';
+      document.getElementById('td-especie').innerHTML='<option value="">Todas las especies</option>';
+      loadTablaEst();
+    } else { showAlert('Error: '+data.error,'error'); }
+  } catch(e) { showAlert('Error de conexión: '+e,'error'); }
+  btn.innerHTML='📤 Subir Estimación'; btn.disabled=false;
+}
+
+async function loadVersions() {
+  const data = await fetch('/api/estimacion/versions').then(r=>r.json());
+  const divBtn = document.getElementById('div-download-ultimo');
+  const lbl    = document.getElementById('lbl-ultimo-archivo');
+  if (data.length>0) {
+    divBtn.style.display='block';
+    lbl.textContent=`Versión ${data[0].numero_version}  ·  ${(data[0].fecha_actualizacion||'').slice(0,16)}  ·  ${data[0].filas_cargadas||0} filas`;
+    document.getElementById('version-badge').textContent=`v${data[0].numero_version}`;
+  } else { divBtn.style.display='none'; }
+  const el = document.getElementById('versions-table');
+  if (!data.length) { el.innerHTML='<div class="empty-state"><div class="icon">📜</div>Sin versiones</div>'; return; }
+  el.innerHTML=`<table><thead><tr><th>Versión</th><th>Fecha</th><th>Filas</th><th>Observación</th></tr></thead><tbody>
+    ${data.map(v=>`<tr><td><span class="badge badge-blue">v${v.numero_version}</span></td>
+      <td>${(v.fecha_actualizacion||'').slice(0,16)}</td>
+      <td class="num">${fmt(v.filas_cargadas)}</td>
+      <td>${v.observacion||'—'}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+
+// ════════════════════════════════════════════════════════
+//  TASAS
+// ════════════════════════════════════════════════════════
+function updateTasaForm() {
+  const tipo = document.getElementById('t-tipo').value;
+  document.getElementById('f-anio').style.display   = tipo==='anual'   ?'block':'none';
+  document.getElementById('f-mes').style.display    = tipo==='mensual' ?'block':'none';
+  document.getElementById('f-semana').style.display = tipo==='semanal' ?'block':'none';
+  document.getElementById('f-rango').style.display  = tipo==='rango'   ?'block':'none';
+}
+updateTasaForm();
+
+async function addTasa() {
+  const tipo   = document.getElementById('t-tipo').value;
+  const moneda = (document.getElementById('t-moneda').value||'CLP').toUpperCase();
+  const nombre = document.getElementById('t-nombre').value;
+  const valor  = parseFloat(document.getElementById('t-valor').value);
+  if (!moneda) { showAlert('Ingresa la moneda','error'); return; }
+  if (!nombre) { showAlert('Ingresa un nombre','error'); return; }
+  if (isNaN(valor)||valor<=0) { showAlert('Valor inválido','error'); return; }
+  const payload = { nombre, valor, tipo, moneda,
+    anio:         tipo==='anual'   ? parseInt(document.getElementById('t-anio').value)||null   : null,
+    mes:          tipo==='mensual' ? parseInt(document.getElementById('t-mes').value)||null     : null,
+    semana:       tipo==='semanal' ? parseInt(document.getElementById('t-semana').value)||null  : null,
+    fecha_inicio: tipo==='rango'   ? document.getElementById('t-fi').value  : null,
+    fecha_fin:    tipo==='rango'   ? document.getElementById('t-ff').value  : null,
+  };
+  const data = await fetch('/api/tasas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json());
+  if (data.ok) {
+    showAlert(`Tasa ${moneda} agregada ✅`);
+    document.getElementById('t-moneda').value='CLP';
+    document.getElementById('t-nombre').value='';
+    document.getElementById('t-valor').value='';
+    await cargarMonedasSelector(); loadTasas();
+  } else { showAlert('Error: '+(data.error||'desconocido'),'error'); }
+}
+
+async function loadTasas() {
+  const data = await fetch('/api/tasas').then(r=>r.json());
+  const el = document.getElementById('tasas-list');
+  if (!data.length) { el.innerHTML='<div class="empty-state"><div class="icon">💱</div>Sin tasas</div>'; return; }
+  const meses=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const tagCls={anual:'tag-anual',mensual:'tag-mensual',semanal:'tag-semanal',rango:'tag-rango'};
+  const porMoneda={};
+  data.forEach(t=>{ const m=t.moneda||'CLP'; if(!porMoneda[m]) porMoneda[m]=[]; porMoneda[m].push(t); });
+  let html='';
+  Object.entries(porMoneda).forEach(([mon,tasas])=>{
+    html+=`<div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:#5b21b6;background:#ede9fe;
+                  padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:6px">💱 ${mon}</div>
+      <table><thead><tr><th>Nombre</th><th>Tipo</th><th>Valor</th><th>Alcance</th><th></th></tr></thead><tbody>
+      ${tasas.map(t=>{
+        let alc='';
+        if(t.tipo==='anual')    alc=t.anio||'Todos';
+        else if(t.tipo==='mensual') alc=meses[t.mes]||t.mes;
+        else if(t.tipo==='semanal') alc=`Sem ${t.semana}`;
+        else if(t.tipo==='rango')   alc=`${t.fecha_inicio} a ${t.fecha_fin}`;
+        return `<tr><td>${t.nombre||'—'}</td>
+          <td><span class="tag-tipo ${tagCls[t.tipo]||''}">${t.tipo}</span></td>
+          <td class="num">${fmt(t.valor)}</td><td>${alc}</td>
+          <td><button class="btn btn-danger btn-xs" onclick="deleteTasa(${t.id})">✕</button></td></tr>`;
+      }).join('')}
+      </tbody></table></div>`;
+  });
+  el.innerHTML=html;
+}
+
+async function deleteTasa(id) {
+  if (!confirm('¿Eliminar esta tasa?')) return;
+  await fetch('/api/tasas/'+id,{method:'DELETE'});
+  await cargarMonedasSelector(); loadTasas();
+}
+
+// ════════════════════════════════════════════════════════
+//  UNITARIOS
+// ════════════════════════════════════════════════════════
+async function loadUnitarios() {
+  const data = await fetch('/api/unitarios').then(r=>r.json());
+  const el   = document.getElementById('unitarios-form');
+  if (!data.length) { el.innerHTML='<div class="empty-state"><div class="icon">🍋</div>Carga una estimación primero</div>'; return; }
+  el.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+    ${data.map(u=>{
+      const k=u.especie.replace(/\s/g,'_');
+      const tot=((u.precio_usd_packing||0)+(u.precio_usd_frio||0)).toFixed(3);
+      return `<div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:#fafafa">
+        <div style="font-weight:700;color:var(--primary);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+          <span>🌿 ${u.especie}</span>
+          <span id="tot-${k}" style="background:#ede9fe;color:#5b21b6;font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid #c4b5fd">$${tot}</span>
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label style="color:#1e40af">💼 Packing (USD/kg proc)</label>
+          <div class="flex"><span style="padding:8px 10px;background:#dbeafe;border:1px solid #93c5fd;border-right:none;border-radius:6px 0 0 6px;color:#1e40af;font-size:12px">USD</span>
+          <input type="number" step="0.001" min="0" value="${u.precio_usd_packing||0}" id="upk-${k}" style="border-radius:0 6px 6px 0;border-color:#93c5fd" oninput="recalcTot('${k}')"></div>
+        </div>
+        <div class="form-group">
+          <label style="color:#0c4a6e">❄️ Frío (USD/kg export)</label>
+          <div class="flex"><span style="padding:8px 10px;background:#e0f2fe;border:1px solid #7dd3fc;border-right:none;border-radius:6px 0 0 6px;color:#0c4a6e;font-size:12px">USD</span>
+          <input type="number" step="0.001" min="0" value="${u.precio_usd_frio||0}" id="ufr-${k}" style="border-radius:0 6px 6px 0;border-color:#7dd3fc" oninput="recalcTot('${k}')"></div>
+        </div>
+        <p class="tip">Actualizado: ${(u.actualizado_en||'—').slice(0,10)}</p>
+      </div>`;
+    }).join('')}
+  </div>`;
+  window._uEspecies = data.map(u=>u.especie);
+}
+function recalcTot(k) {
+  const pk=parseFloat(document.getElementById('upk-'+k)?.value)||0;
+  const fr=parseFloat(document.getElementById('ufr-'+k)?.value)||0;
+  const el=document.getElementById('tot-'+k);
+  if(el) el.textContent='$'+(pk+fr).toFixed(3);
+}
+async function saveUnitarios() {
+  const payload=(window._uEspecies||[]).map(esp=>{
+    const k=esp.replace(/\s/g,'_');
+    return { especie:esp,
+      precio_usd_packing:parseFloat(document.getElementById('upk-'+k)?.value)||0,
+      precio_usd_frio:   parseFloat(document.getElementById('ufr-'+k)?.value)||0 };
+  });
+  await fetch('/api/unitarios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  showAlert('Precios guardados ✅');
+}
+
+// ════════════════════════════════════════════════════════
+//  EXPORTABLE
+// ════════════════════════════════════════════════════════
+async function loadExportable() {
+  const data = await fetch('/api/exportable').then(r=>r.json());
+  const el   = document.getElementById('exportable-form');
+  if (!data.length) { el.innerHTML='<div class="empty-state"><div class="icon">📦</div>Carga una estimación primero</div>'; return; }
+  el.innerHTML=`<div class="grid-3">${data.map(u=>`<div class="form-group">
+    <label>${u.especie}</label>
+    <div class="flex">
+      <input type="number" step="0.1" min="0" max="100" value="${((u.porcentaje||0)*100).toFixed(1)}" id="exp-${u.especie.replace(/\s/g,'_')}" style="border-radius:6px 0 0 6px">
+      <span style="padding:8px 10px;background:#f8fafc;border:1px solid var(--border);border-left:none;border-radius:0 6px 6px 0;color:var(--muted)">%</span>
+    </div>
+    <p class="tip">${(u.actualizado_en||'—').slice(0,10)}</p>
+  </div>`).join('')}</div>`;
+  window._expEspecies=data.map(u=>u.especie);
+}
+async function saveExportable() {
+  const payload=(window._expEspecies||[]).map(esp=>({
+    especie:esp,
+    porcentaje:(parseFloat(document.getElementById('exp-'+esp.replace(/\s/g,'_')).value)||0)/100
+  }));
+  await fetch('/api/exportable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  showAlert('Porcentajes guardados ✅');
+}
+
+// ════════════════════════════════════════════════════════
+//  PRESUPUESTO
+// ════════════════════════════════════════════════════════
+async function loadPpto() {
+  const data = await fetch(`/api/ppto/resumen?agrupar=${currentPptoView}&moneda=${monedaActual}`).then(r=>r.json());
+  const el   = document.getElementById('ppto-table');
+  const labels= {mes:'Mes',semana:'Semana',especie:'Especie'};
+  document.getElementById('ppto-card-title').textContent='📈 Presupuesto por '+labels[currentPptoView];
+  if (!data.length) { el.innerHTML='<div class="empty-state"><div class="icon">📈</div>Sin datos</div>'; return; }
+  let tk=0,te=0,tp=0,tf=0,tu=0,tm=0;
+  data.forEach(r=>{ tk+=r.kgs_totales||0; te+=r.kg_export||0; tp+=r.usd_packing||0; tf+=r.usd_frio||0; tu+=r.usd_total||0; tm+=r.clp_total||0; });
+  el.innerHTML=`<div class="table-wrap"><table><thead><tr>
+    <th>${labels[currentPptoView]}</th><th class="num">Kgs Proc</th><th class="num">Kg Export</th>
+    <th class="num" style="background:#1e40af">💼 USD Pack.</th>
+    <th class="num" style="background:#0c4a6e">❄️ USD Frío</th>
+    <th class="num" style="background:#5b21b6">💰 USD Total</th>
+    <th class="num">Tasa</th><th class="num">Ingreso ${monedaActual}</th>
+  </tr></thead><tbody>
+    ${data.map(r=>`<tr>
+      <td><strong>${r.periodo}</strong></td>
+      <td class="num">${fmt(r.kgs_totales)}</td><td class="num text-green">${fmt(r.kg_export)}</td>
+      <td class="num" style="background:#eff6ff;color:#1e40af">${fmtUSD(r.usd_packing)}</td>
+      <td class="num" style="background:#f0f9ff;color:#0c4a6e">${fmtUSD(r.usd_frio)}</td>
+      <td class="num" style="background:#f5f3ff;font-weight:700;color:#5b21b6">${fmtUSD(r.usd_total)}</td>
+      <td class="num text-muted">${r.tasa_usada?fmt(r.tasa_usada):'—'}</td>
+      <td class="num"><strong>${fmtMon(r.clp_total)}</strong></td>
+    </tr>`).join('')}
+  </tbody><tfoot><tr class="tr-total">
+    <td><strong>TOTAL</strong></td><td class="num">${fmt(tk)}</td><td class="num">${fmt(te)}</td>
+    <td class="num">${fmtUSD(tp)}</td><td class="num">${fmtUSD(tf)}</td>
+    <td class="num">${fmtUSD(tu)}</td><td class="num">—</td><td class="num">${fmtMon(tm)}</td>
+  </tr></tfoot></table></div>`;
+}
+function setPptoView(view, el) {
+  currentPptoView=view;
+  document.querySelectorAll('#page-ppto .tab').forEach(t=>t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  loadPpto();
+}
+
+// ════════════════════════════════════════════════════════
+//  DASHBOARD
+// ════════════════════════════════════════════════════════
+async function loadDashboard() {
+  try {
+    const [rMes,rEsp] = await Promise.all([
+      fetch(`/api/ppto/resumen?agrupar=mes&moneda=${monedaActual}`).then(r=>r.json()),
+      fetch(`/api/ppto/resumen?agrupar=especie&moneda=${monedaActual}`).then(r=>r.json()),
+    ]);
+    let tk=0,te=0,tp=0,tf=0,tu=0,tm=0;
+    rMes.forEach(r=>{ tk+=r.kgs_totales||0; te+=r.kg_export||0; tp+=r.usd_packing||0; tf+=r.usd_frio||0; tu+=r.usd_total||0; tm+=r.clp_total||0; });
+    document.getElementById('kpi-kgs').textContent    = fmt(tk);
+    document.getElementById('kpi-kgexp').textContent  = fmt(te);
+    document.getElementById('kpi-usd-pk').textContent = tp>1e6?'$'+fmt(tp/1e6,2)+'M':fmtUSD(tp);
+    document.getElementById('kpi-usd-fr').textContent = tf>1e6?'$'+fmt(tf/1e6,2)+'M':fmtUSD(tf);
+    document.getElementById('kpi-usd').textContent    = tu>1e6?'$'+fmt(tu/1e6,2)+'M':fmtUSD(tu);
+    document.getElementById('kpi-clp').textContent    = tm>1e9?fmt(tm/1e9,1)+'B':tm>1e6?fmt(tm/1e6,2)+'M':fmtMon(tm);
+    document.getElementById('kpi-mon-lbl').textContent= monedaActual;
+
+    const tblHdr=`<th>Mes</th><th class="num">Kgs</th><th class="num" style="background:#1e40af">USD Pack.</th><th class="num" style="background:#0c4a6e">USD Frío</th><th class="num" style="background:#5b21b6">USD Total</th><th class="num">${monedaActual}</th>`;
+    const tblRow=r=>`<tr><td>${r.periodo}</td><td class="num">${fmt(r.kgs_totales)}</td>
+      <td class="num" style="color:#1e40af">${fmtUSD(r.usd_packing)}</td>
+      <td class="num" style="color:#0c4a6e">${fmtUSD(r.usd_frio)}</td>
+      <td class="num" style="color:#5b21b6;font-weight:700">${fmtUSD(r.usd_total)}</td>
+      <td class="num"><strong>${fmtMon(r.clp_total)}</strong></td></tr>`;
+    if(rMes.length) document.getElementById('dash-mes-table').innerHTML=`<table><thead><tr>${tblHdr}</tr></thead><tbody>${rMes.map(tblRow).join('')}</tbody></table>`;
+    if(rEsp.length) {
+      const h=tblHdr.replace('>Mes<','>Especie<');
+      document.getElementById('dash-esp-table').innerHTML=`<table><thead><tr>${h}</tr></thead><tbody>${rEsp.map(tblRow).join('')}</tbody></table>`;
+    }
+    const vr = await fetch('/api/estimacion/versions').then(r=>r.json());
+    if (vr.length) {
+      document.getElementById('version-badge').textContent=`v${vr[0].numero_version}`;
+      document.getElementById('topbar-info').textContent=`Actualizado: ${(vr[0].fecha_actualizacion||'').slice(0,16)} | `;
+    }
+  } catch(e) { console.error(e); }
+}
+
+function exportarExcel() { window.location.href=`/api/ppto/exportar?moneda=${monedaActual}`; }
+
+// ════════════════════════════════════════════════════════
+//  TABLA DINÁMICA
+// ════════════════════════════════════════════════════════
+let _pivotData=[];
+const MESES_NOM={1:'Enero',2:'Febrero',3:'Marzo',4:'Abril',5:'Mayo',6:'Junio',
+                 7:'Julio',8:'Agosto',9:'Septiembre',10:'Octubre',11:'Noviembre',12:'Diciembre'};
+
+async function loadTablaEst() {
+  _pivotData = await fetch('/api/estimacion/pivot').then(r=>r.json());
+  if (!_pivotData.length) return;
+  const sExp=document.getElementById('td-exportadora');
+  const sEsp=document.getElementById('td-especie');
+  if (sExp.options.length===1) {
+    [...new Set(_pivotData.map(r=>r.exportadora).filter(Boolean))].sort().forEach(e=>sExp.add(new Option(e,e)));
+  }
+  if (sEsp.options.length===1) {
+    [...new Set(_pivotData.map(r=>r.especie).filter(Boolean))].sort().forEach(e=>sEsp.add(new Option(e,e)));
+  }
+  renderTablaEst();
+}
+function resetFiltrosTablaEst() {
+  document.getElementById('td-exportadora').value='';
+  document.getElementById('td-especie').value='';
+  document.getElementById('td-agrupar').value='mes';
+  renderTablaEst();
+}
+function renderTablaEst() {
+  const ag=document.getElementById('td-agrupar').value;
+  const fExp=document.getElementById('td-exportadora').value;
+  const fEsp=document.getElementById('td-especie').value;
+  const ct=document.getElementById('tabla-est-container');
+  let datos=_pivotData;
+  if(fExp) datos=datos.filter(r=>r.exportadora===fExp);
+  if(fEsp) datos=datos.filter(r=>r.especie===fEsp);
+  if(!datos.length){ct.innerHTML='<div class="empty-state"><div class="icon">🔍</div>Sin resultados</div>';return;}
+  const cv=ag==='mes'?r=>r.mes:r=>r.semana;
+  const ORDEN=[10,11,12,1,2,3,4,5,6,7,8,9];
+  const sort=(a,b)=>ag==='mes'?(ORDEN.indexOf(a)<0?99:ORDEN.indexOf(a))-(ORDEN.indexOf(b)<0?99:ORDEN.indexOf(b)):(a<40?a+100:a)-(b<40?b+100:b);
+  const cols=[...new Set(datos.map(cv))].sort(sort);
+  const fks=[...new Set(datos.map(r=>`${r.exportadora}||${r.especie}`))].sort();
+  const mapa={};
+  datos.forEach(r=>{const fk=`${r.exportadora}||${r.especie}`;if(!mapa[fk])mapa[fk]={};mapa[fk][cv(r)]=(mapa[fk][cv(r)]||0)+(r.kgs_total||0);});
+  const totC={};cols.forEach(c=>{totC[c]=fks.reduce((s,fk)=>s+(mapa[fk]?.[c]||0),0);});
+  const grand=cols.reduce((s,c)=>s+(totC[c]||0),0);
+  let lastExp=null;
+  const filas=fks.map(fk=>{
+    const[exp,esp]=fk.split('||');
+    const rowT=cols.reduce((s,c)=>s+(mapa[fk]?.[c]||0),0);
+    const hdr=(!fExp&&exp!==lastExp)?`<tr style="background:#e2e8f0"><td colspan="${cols.length+3}" style="padding:6px 12px;font-weight:700;color:#1a3a5c;font-size:12px">🏢 ${exp}</td></tr>`:'';
+    lastExp=exp;
+    return `${hdr}<tr>${!fExp?`<td style="color:#6b7280;font-size:12px;padding-left:20px">${exp}</td>`:''}<td style="font-weight:600">${esp}</td>
+      ${cols.map(c=>`<td class="num" style="color:${(mapa[fk]?.[c]||0)>0?'#1a3a5c':'#d1d5db'}">${(mapa[fk]?.[c]||0)>0?fmt(mapa[fk][c]):'—'}</td>`).join('')}
+      <td class="num" style="font-weight:700;background:#f8fafc">${fmt(rowT)}</td></tr>`;
+  }).join('');
+  const chdr=cols.map(c=>`<th class="num">${ag==='mes'?(MESES_NOM[c]||`M${c}`).substring(0,3).toUpperCase():`S${c}`}</th>`).join('');
+  ct.innerHTML=`<div style="margin-bottom:8px;font-size:12px;color:#6b7280">${datos.length} registros · Total: <strong>${fmt(grand)} kg</strong></div>
+    <div class="table-wrap" style="max-height:480px;overflow-y:auto">
+      <table><thead style="position:sticky;top:0;z-index:2"><tr>${!fExp?'<th>Exportadora</th>':''}<th>Especie</th>${chdr}<th class="num" style="background:#1a3a5c">TOTAL</th></tr></thead>
+      <tbody>${filas}</tbody>
+      <tfoot><tr class="tr-total">${!fExp?'<td></td>':''}<td><strong>TOTAL</strong></td>${cols.map(c=>`<td class="num">${fmt(totC[c])}</td>`).join('')}<td class="num">${fmt(grand)}</td></tr></tfoot>
+      </table></div>`;
+}
+
+// ════════════════════════════════════════════════════════
+//  CONFIGURACIÓN BD
+// ════════════════════════════════════════════════════════
+async function initConfigPage() {
+  // Cargar engines disponibles
+  _engines = await fetch('/api/config/engines').then(r=>r.json());
+  // Cargar config actual
+  const cfg = await fetch('/api/config/db').then(r=>r.json());
+  _selectedEngine = cfg.DB_ENGINE || 'sqlserver';
+
+  renderEngineCards();
+  fillConfigForm(cfg);
+  updateEngineBadge(cfg.DB_ENGINE);
+}
+
+function renderEngineCards() {
+  const cont = document.getElementById('engine-cards');
+  cont.innerHTML = Object.entries(_engines).map(([key, eng])=>`
+    <div class="engine-card ${key===_selectedEngine?'selected':''}"
+         onclick="selectEngine('${key}')">
+      <div class="icon">${eng.icon}</div>
+      <div class="name">${eng.label}</div>
+      <div class="port">Puerto: ${eng.default_port}</div>
+    </div>`).join('');
+}
+
+function selectEngine(key) {
+  _selectedEngine = key;
+  renderEngineCards();
+  const eng = _engines[key];
+  // Actualizar hint de puerto
+  document.getElementById('cfg-port-hint').textContent = `(${eng.default_port})`;
+  // Actualizar label de schema
+  document.getElementById('cfg-schema-label').textContent = eng.schema_label || 'Schema';
+  // Mostrar/ocultar campos específicos
+  const winauthRow = document.getElementById('cfg-winauth-row');
+  const driverRow  = document.getElementById('cfg-driver-row');
+  winauthRow.style.display = eng.has_windows_auth ? 'block' : 'none';
+  driverRow.style.display  = eng.driver_field     ? 'block' : 'none';
+  // Reset status
+  document.getElementById('conn-status-box').className='conn-status conn-idle';
+  document.getElementById('conn-status-box').innerHTML='⬤ &nbsp;Completa los datos y prueba la conexión';
+}
+
+function fillConfigForm(cfg) {
+  document.getElementById('cfg-server').value    = cfg.DB_SERVER    || '';
+  document.getElementById('cfg-port').value      = cfg.DB_PORT      || '';
+  document.getElementById('cfg-database').value  = cfg.DB_DATABASE  || '';
+  document.getElementById('cfg-schema').value    = cfg.DB_SCHEMA    || '';
+  document.getElementById('cfg-user').value      = cfg.DB_USER      || '';
+  document.getElementById('cfg-password').value  = '';  // nunca prellenar contraseña
+  document.getElementById('cfg-driver').value    = cfg.DB_DRIVER    || 'ODBC Driver 17 for SQL Server';
+  document.getElementById('cfg-flask-port').value= cfg.FLASK_PORT   || '5050';
+  const wa = cfg.DB_WINDOWS_AUTH===true||cfg.DB_WINDOWS_AUTH==='true'||cfg.DB_WINDOWS_AUTH==='True';
+  document.getElementById('cfg-winauth').checked = wa;
+  toggleWinAuth(wa);
+  selectEngine(cfg.DB_ENGINE || 'sqlserver');
+}
+
+function toggleWinAuth(checked) {
+  document.getElementById('cfg-creds-row').style.display = checked ? 'none' : 'block';
+}
+
+function buildPayload() {
+  const wa = document.getElementById('cfg-winauth').checked;
+  return {
+    DB_ENGINE:       _selectedEngine,
+    DB_SERVER:       document.getElementById('cfg-server').value.trim(),
+    DB_PORT:         document.getElementById('cfg-port').value.trim(),
+    DB_DATABASE:     document.getElementById('cfg-database').value.trim(),
+    DB_SCHEMA:       document.getElementById('cfg-schema').value.trim(),
+    DB_USER:         wa ? '' : document.getElementById('cfg-user').value.trim(),
+    DB_PASSWORD:     wa ? '' : document.getElementById('cfg-password').value,
+    DB_DRIVER:       document.getElementById('cfg-driver').value,
+    DB_WINDOWS_AUTH: wa,
+    FLASK_PORT:      document.getElementById('cfg-flask-port').value.trim(),
+  };
+}
+
+async function testConexion() {
+  const box = document.getElementById('conn-status-box');
+  box.className='conn-status conn-idle';
+  box.innerHTML='⬤ &nbsp;Probando conexión…';
+  const payload = buildPayload();
+  try {
+    const data = await fetch('/api/config/db-test',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    }).then(r=>r.json());
+    if (data.ok) {
+      box.className='conn-status conn-ok';
+      box.innerHTML='✅ &nbsp;'+data.message;
+    } else {
+      box.className='conn-status conn-fail';
+      box.innerHTML='❌ &nbsp;'+data.message;
+    }
+  } catch(e) {
+    box.className='conn-status conn-fail';
+    box.innerHTML='❌ &nbsp;Error de red: '+e;
+  }
+}
+
+async function guardarConfig() {
+  const payload = buildPayload();
+  try {
+    const data = await fetch('/api/config/db',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    }).then(r=>r.json());
+    if (data.ok) {
+      showAlert('✅ '+data.message);
+      updateEngineBadge(_selectedEngine);
+    } else {
+      showAlert('❌ '+data.error,'error');
+    }
+  } catch(e) {
+    showAlert('Error: '+e,'error');
+  }
+}
+
+function updateEngineBadge(engine) {
+  const badge = document.getElementById('engine-badge');
+  const eng   = _engines[engine] || {};
+  badge.className='engine-badge engine-'+engine;
+  badge.textContent=(eng.icon||'🗄️')+' '+(eng.label||engine);
+}
+
+// ════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════
+(async ()=>{
+  await cargarMonedasSelector();
+  document.getElementById('kpi-mon-lbl').textContent = monedaActual;
+  loadDashboard();
+})();
+</script>
+</body>
+</html>
