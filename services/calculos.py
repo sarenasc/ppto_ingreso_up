@@ -3,6 +3,10 @@ services/calculos.py — Logica de calculo de presupuesto.
 
 Temporada agricola: Nov → Oct  (meses 11,12,1,2,3,4,5,6,7,8,9,10)
                     Semanas 44→52, luego 1→43
+
+Unitarios: precio por (exportadora, especie)
+  Lookup: (exportadora, especie) → {packing, frio}
+  Si no existe la combinacion, usa 0.
 """
 
 from datetime import datetime
@@ -21,17 +25,12 @@ MESES_ABREV: dict[int, str] = {k: v[:3].upper() for k, v in MESES_NOMBRE.items()
 ORDEN_MESES_TEMPORADA: list[int] = [11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 def sort_mes_temporada(mes: int) -> int:
-    """Devuelve el indice de ordenamiento de temporada para un mes."""
     try:
         return ORDEN_MESES_TEMPORADA.index(mes)
     except ValueError:
         return 99
 
 def sort_semana_temporada(semana: int) -> int:
-    """
-    Semanas de temporada Nov-Oct:
-    Semana 44-52 primero (inicio temporada), luego 1-43.
-    """
     if semana is None:
         return 999
     return semana if semana >= 44 else semana + 100
@@ -51,6 +50,13 @@ def next_version() -> int:
 
 
 def load_calc_data() -> tuple[list, list, dict, dict]:
+    """
+    Carga desde BD:
+      rows       → filas de ppto_estimacion
+      tasas      → tasas activas
+      unitarios  → {(exportadora, especie): {packing, frio}}
+      exportable → {especie: porcentaje_decimal}
+    """
     schema = CFG['DB_SCHEMA']
     db     = get_db()
     with db.get_conn() as conn:
@@ -64,12 +70,16 @@ def load_calc_data() -> tuple[list, list, dict, dict]:
         ), (1,))
         tasas = db.fetchall_dicts(cur)
 
+        # Unitarios ahora por (exportadora, especie)
         cur.execute(
-            f"SELECT especie, precio_usd_packing, precio_usd_frio "
+            f"SELECT exportadora, especie, precio_usd_packing, precio_usd_frio "
             f"FROM {schema}.ppto_unitarios"
         )
         unitarios = {
-            r['especie']: {'packing': r['precio_usd_packing'], 'frio': r['precio_usd_frio']}
+            (r['exportadora'], r['especie']): {
+                'packing': r['precio_usd_packing'],
+                'frio':    r['precio_usd_frio'],
+            }
             for r in db.fetchall_dicts(cur)
         }
 
@@ -116,13 +126,21 @@ def get_tasa_for_row(tasas, fecha_str, semana, mes, moneda='CLP'):
 
 # ── Calculo de una fila ───────────────────────────────────────────────
 def calcular_fila(row, unitarios, exportable, tasas, moneda='CLP'):
-    esp    = row.get('especie') or ''
-    kgs    = float(row.get('kgs_a_proc') or 0)
-    semana = row.get('semana')
-    mes    = row.get('mes')
-    fecha  = str(row['fecha'])[:10] if row.get('fecha') else None
+    """
+    Calcula valores derivados de una fila de estimacion.
+    unitarios: dict con clave (exportadora, especie) → {packing, frio}
+    Si no existe la combinacion, usa 0.
+    """
+    esp         = row.get('especie')     or ''
+    exportadora = row.get('exportadora') or ''
+    kgs         = float(row.get('kgs_a_proc') or 0)
+    semana      = row.get('semana')
+    mes         = row.get('mes')
+    fecha       = str(row['fecha'])[:10] if row.get('fecha') else None
 
-    u              = unitarios.get(esp, {})
+    # Buscar precio por (exportadora, especie); si no hay, usar 0
+    u = unitarios.get((exportadora, esp), {})
+
     pct            = float(exportable.get(esp) or 0)
     precio_packing = float(u.get('packing') or 0)
     precio_frio    = float(u.get('frio')    or 0)

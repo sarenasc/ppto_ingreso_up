@@ -88,9 +88,22 @@ def upload():
                 VALUES (?, ?, ?, ?)
             """), (version, now, observacion, len(rows)))
 
-            for esp in df['especie'].dropna().unique():
-                db.ensure_unitario_exists(cur,   schema, esp, now)
-                db.ensure_exportable_exists(cur, schema, esp, now)
+            # Crear unitarios por combinacion exportadora+especie
+            combos = df[['exportadora','especie']].dropna().drop_duplicates()
+            for _, combo_row in combos.iterrows():
+                exp_val = combo_row.get('exportadora')
+                esp_val = combo_row.get('especie')
+                if exp_val and esp_val:
+                    cur.execute(db.norm(f"""
+                        INSERT INTO {schema}.ppto_unitarios
+                            (exportadora, especie, precio_usd_packing, precio_usd_frio, actualizado_en)
+                        SELECT ?, ?, 0, 0, ?
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM {schema}.ppto_unitarios
+                            WHERE exportadora=? AND especie=?
+                        )
+                    """), (str(exp_val), str(esp_val), now, str(exp_val), str(esp_val)))
+                db.ensure_exportable_exists(cur, schema, str(esp_val), now)
 
         # Guardar copia física del archivo
         try:

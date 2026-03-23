@@ -291,7 +291,7 @@
         <div class="kpi" style="border-left-color:#2563eb"><div class="kpi-label">USD Packing</div><div class="kpi-value" id="kpi-usd-pk" style="color:#1e40af">—</div><div class="kpi-sub">Kgs Proc × P.Unit Packing</div></div>
         <div class="kpi" style="border-left-color:#0284c7"><div class="kpi-label">USD Frío</div><div class="kpi-value" id="kpi-usd-fr" style="color:#0c4a6e">—</div><div class="kpi-sub">Kg Export × P.Unit Frío</div></div>
         <div class="kpi orange"><div class="kpi-label">USD Total</div><div class="kpi-value" id="kpi-usd">—</div><div class="kpi-sub">Packing + Frío</div></div>
-        <div class="kpi red"><div class="kpi-label">Ingreso CLP<span id="kpi-mon-lbl"></span></div><div class="kpi-value" id="kpi-clp">—</div><div class="kpi-sub">CLP total</div></div>
+        <div class="kpi red"><div class="kpi-label">Ingreso <span id="kpi-mon-lbl">CLP</span></div><div class="kpi-value" id="kpi-clp">—</div><div class="kpi-sub">USD Total × Tasa</div></div>
       </div>
       <!-- Árbol jerárquico en dashboard -->
       <div class="card" style="margin-top:0">
@@ -414,19 +414,30 @@
     <!-- ══════════════ UNITARIOS ══════════════ -->
     <div id="page-unitarios" class="page">
       <div class="card">
-        <div class="card-title">💰 Precios Unitarios por Especie (USD/kg)</div>
+        <div class="card-title" style="justify-content:space-between">
+          <span>💰 Precios Unitarios por Exportadora → Especie (USD/kg)</span>
+          <button class="btn btn-success btn-sm" onclick="saveUnitarios()">💾 Guardar Precios</button>
+        </div>
+        <!-- Info boxes -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
           <div style="background:#dbeafe;border-radius:8px;padding:12px;border-left:4px solid #2d6a9f">
             <div style="font-weight:700;color:#1e40af;margin-bottom:4px">💼 USD Packing</div>
             <div style="font-size:12px;color:#1e3a5f">= Kgs a Proc × Precio Packing</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:2px">Precio específico por exportadora y especie</div>
           </div>
           <div style="background:#e0f2fe;border-radius:8px;padding:12px;border-left:4px solid #0284c7">
             <div style="font-weight:700;color:#0c4a6e;margin-bottom:4px">❄️ USD Frío</div>
             <div style="font-size:12px;color:#0c4a6e">= Kg Export × Precio Frío</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:2px">Precio específico por exportadora y especie</div>
           </div>
         </div>
-        <div id="unitarios-form"><div class="empty-state"><div class="icon">🍋</div>Carga una estimación primero</div></div>
-        <div style="margin-top:16px"><button class="btn btn-success" onclick="saveUnitarios()">💾 Guardar Precios</button></div>
+        <!-- Tabla de precios -->
+        <div id="unitarios-form">
+          <div class="empty-state"><div class="icon">🍋</div>Carga una estimación primero para ver las combinaciones</div>
+        </div>
+        <div style="margin-top:16px">
+          <button class="btn btn-success" onclick="saveUnitarios()">💾 Guardar Todos los Precios</button>
+        </div>
       </div>
     </div>
 
@@ -899,69 +910,181 @@ async function deleteTasa(id) {
 // ════════════════════════════════════════════════════════
 //  UNITARIOS
 // ════════════════════════════════════════════════════════
+let _unitariosData = [];
+
 async function loadUnitarios() {
-  const data = await fetch('/api/unitarios').then(r=>r.json());
-  const el   = document.getElementById('unitarios-form');
-  if (!data.length) { el.innerHTML='<div class="empty-state"><div class="icon">🍋</div>Carga una estimación primero</div>'; return; }
-  el.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
-    ${data.map(u=>{
-      const k=u.especie.replace(/\s/g,'_');
-      const tot=((u.precio_usd_packing||0)+(u.precio_usd_frio||0)).toFixed(3);
-      return `<div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:#fafafa">
-        <div style="font-weight:700;color:var(--primary);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
-          <span>🌿 ${u.especie}</span>
-          <span id="tot-${k}" style="background:#ede9fe;color:#5b21b6;font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid #c4b5fd">$${tot}</span>
-        </div>
-        <div class="form-group" style="margin-bottom:8px">
-          <label style="color:#1e40af">💼 Packing (USD/kg proc)</label>
-          <div class="flex"><span style="padding:8px 10px;background:#dbeafe;border:1px solid #93c5fd;border-right:none;border-radius:6px 0 0 6px;color:#1e40af;font-size:12px">USD</span>
-          <input type="number" step="0.001" min="0" value="${u.precio_usd_packing||0}" id="upk-${k}" style="border-radius:0 6px 6px 0;border-color:#93c5fd" oninput="recalcTot('${k}')"></div>
-        </div>
-        <div class="form-group">
-          <label style="color:#0c4a6e">❄️ Frío (USD/kg export)</label>
-          <div class="flex"><span style="padding:8px 10px;background:#e0f2fe;border:1px solid #7dd3fc;border-right:none;border-radius:6px 0 0 6px;color:#0c4a6e;font-size:12px">USD</span>
-          <input type="number" step="0.001" min="0" value="${u.precio_usd_frio||0}" id="ufr-${k}" style="border-radius:0 6px 6px 0;border-color:#7dd3fc" oninput="recalcTot('${k}')"></div>
-        </div>
-        <p class="tip">Actualizado: ${(u.actualizado_en||'—').slice(0,10)}</p>
-      </div>`;
-    }).join('')}
-  </div>`;
-  window._uEspecies = data.map(u=>u.especie);
-}
-function recalcTot(k) {
-  const pk=parseFloat(document.getElementById('upk-'+k)?.value)||0;
-  const fr=parseFloat(document.getElementById('ufr-'+k)?.value)||0;
-  const el=document.getElementById('tot-'+k);
-  if(el) el.textContent='$'+(pk+fr).toFixed(3);
-}
-async function saveUnitarios() {
-  const payload=(window._uEspecies||[]).map(esp=>{
-    const k=esp.replace(/\s/g,'_');
-    return { especie:esp,
-      precio_usd_packing:parseFloat(document.getElementById('upk-'+k)?.value)||0,
-      precio_usd_frio:   parseFloat(document.getElementById('ufr-'+k)?.value)||0 };
+  const el = document.getElementById('unitarios-form');
+  try {
+    _unitariosData = await fetch('/api/unitarios/exportadoras').then(r=>r.json());
+  } catch(e) {
+    el.innerHTML='<div class="empty-state"><div class="icon">⚠️</div>Error al cargar precios</div>';
+    return;
+  }
+  if (!_unitariosData.length) {
+    el.innerHTML='<div class="empty-state"><div class="icon">🍋</div>Carga una estimación primero para ver las combinaciones</div>';
+    return;
+  }
+
+  // Agrupar por exportadora
+  const porExp = {};
+  _unitariosData.forEach(u => {
+    if (!porExp[u.exportadora]) porExp[u.exportadora] = [];
+    porExp[u.exportadora].push(u);
   });
-  await fetch('/api/unitarios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  showAlert('Precios guardados ✅');
+
+  let html = '<div style="display:flex;flex-direction:column;gap:20px">';
+  Object.entries(porExp).forEach(([exp, items]) => {
+    html += `
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="background:var(--primary);padding:10px 16px;display:flex;align-items:center;gap:8px">
+        <span style="color:white;font-weight:700;font-size:14px">🏢 ${exp}</span>
+        <span style="color:rgba(255,255,255,.6);font-size:12px">${items.length} especie${items.length!==1?'s':''}</span>
+      </div>
+      <div style="padding:16px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr>
+              <th style="background:var(--bg);padding:8px 12px;text-align:left;font-weight:600;color:var(--primary);border-bottom:2px solid var(--border)">Especie</th>
+              <th style="background:#dbeafe;padding:8px 12px;text-align:center;font-weight:600;color:#1e40af;border-bottom:2px solid #93c5fd">💼 Packing (USD/kg proc)</th>
+              <th style="background:#e0f2fe;padding:8px 12px;text-align:center;font-weight:600;color:#0c4a6e;border-bottom:2px solid #7dd3fc">❄️ Frío (USD/kg export)</th>
+              <th style="background:#ede9fe;padding:8px 12px;text-align:center;font-weight:600;color:#5b21b6;border-bottom:2px solid #c4b5fd">💰 Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map((u, ri) => {
+              const k = (u.exportadora + '__' + u.especie).replace(/[^a-zA-Z0-9]/g,'_');
+              const tot = ((u.precio_usd_packing||0)+(u.precio_usd_frio||0)).toFixed(3);
+              const bg = ri%2===1 ? 'background:#fafafa' : '';
+              return `<tr style="${bg}">
+                <td style="padding:8px 12px;font-weight:600;color:var(--primary)">🌿 ${u.especie}</td>
+                <td style="padding:6px 12px;text-align:center">
+                  <div style="display:flex;align-items:center;justify-content:center;gap:0;max-width:160px;margin:auto">
+                    <span style="padding:6px 8px;background:#dbeafe;border:1px solid #93c5fd;border-right:none;border-radius:6px 0 0 6px;color:#1e40af;font-size:11px;white-space:nowrap">USD</span>
+                    <input type="number" step="0.001" min="0" value="${u.precio_usd_packing||0}"
+                           id="upk-${k}" style="border-radius:0 6px 6px 0;border-color:#93c5fd;width:90px;padding:6px 8px;text-align:right"
+                           oninput="recalcTotU('${k}')">
+                  </div>
+                </td>
+                <td style="padding:6px 12px;text-align:center">
+                  <div style="display:flex;align-items:center;justify-content:center;gap:0;max-width:160px;margin:auto">
+                    <span style="padding:6px 8px;background:#e0f2fe;border:1px solid #7dd3fc;border-right:none;border-radius:6px 0 0 6px;color:#0c4a6e;font-size:11px;white-space:nowrap">USD</span>
+                    <input type="number" step="0.001" min="0" value="${u.precio_usd_frio||0}"
+                           id="ufr-${k}" style="border-radius:0 6px 6px 0;border-color:#7dd3fc;width:90px;padding:6px 8px;text-align:right"
+                           oninput="recalcTotU('${k}')">
+                  </div>
+                </td>
+                <td style="padding:8px 12px;text-align:center">
+                  <span id="tot-${k}" style="background:#ede9fe;color:#5b21b6;font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid #c4b5fd">$${tot}</span>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
 }
 
-// ════════════════════════════════════════════════════════
-//  EXPORTABLE
-// ════════════════════════════════════════════════════════
-async function loadExportable() {
-  const data = await fetch('/api/exportable').then(r=>r.json());
-  const el   = document.getElementById('exportable-form');
-  if (!data.length) { el.innerHTML='<div class="empty-state"><div class="icon">📦</div>Carga una estimación primero</div>'; return; }
-  el.innerHTML=`<div class="grid-3">${data.map(u=>`<div class="form-group">
-    <label>${u.especie}</label>
-    <div class="flex">
-      <input type="number" step="0.1" min="0" max="100" value="${((u.porcentaje||0)*100).toFixed(1)}" id="exp-${u.especie.replace(/\s/g,'_')}" style="border-radius:6px 0 0 6px">
-      <span style="padding:8px 10px;background:#f8fafc;border:1px solid var(--border);border-left:none;border-radius:0 6px 6px 0;color:var(--muted)">%</span>
-    </div>
-    <p class="tip">${(u.actualizado_en||'—').slice(0,10)}</p>
-  </div>`).join('')}</div>`;
-  window._expEspecies=data.map(u=>u.especie);
+function recalcTotU(k) {
+  const pk = parseFloat(document.getElementById('upk-'+k)?.value)||0;
+  const fr = parseFloat(document.getElementById('ufr-'+k)?.value)||0;
+  const el = document.getElementById('tot-'+k);
+  if (el) el.textContent = '$'+(pk+fr).toFixed(3);
 }
+
+async function saveUnitarios() {
+  const payload = _unitariosData.map(u => {
+    const k = (u.exportadora + '__' + u.especie).replace(/[^a-zA-Z0-9]/g,'_');
+    return {
+      exportadora:        u.exportadora,
+      especie:            u.especie,
+      precio_usd_packing: parseFloat(document.getElementById('upk-'+k)?.value)||0,
+      precio_usd_frio:    parseFloat(document.getElementById('ufr-'+k)?.value)||0,
+    };
+  });
+  const res = await fetch('/api/unitarios',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (data.ok) showAlert('Precios guardados ✅');
+  else showAlert('Error al guardar: '+(data.error||''),'error');
+}
+
+
+async function loadExportable() {
+  try {
+    const data = await fetch('/api/exportable').then(r => r.json());
+    const el = document.getElementById('exportable-form');
+
+    if (!data || !data.length) {
+      el.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">📦</div>
+          Carga una estimación primero
+        </div>`;
+      window._expEspecies = [];
+      return;
+    }
+
+    window._expEspecies = data.map(r => r.especie);
+
+    el.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Especie</th>
+              <th class="num">% Exportable</th>
+              <th>Actualizado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.map(r => `
+              <tr>
+                <td>${r.especie}</td>
+                <td class="num">
+                  <input
+                    type="number"
+                    id="exp-${r.especie.replace(/\s/g,'_')}"
+                    value="${((parseFloat(r.porcentaje || 0)) * 100).toFixed(2)}"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    style="width:120px;text-align:right"
+                  >
+                </td>
+                <td>${r.actualizado_en || '—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (err) {
+    console.error('Error cargando exportable:', err);
+    document.getElementById('exportable-form').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">⚠️</div>
+        Error al cargar porcentajes exportables
+      </div>`;
+  }
+}
+
+async function saveExportable() {
+  const payload=(window._expEspecies||[]).map(esp=>({
+    especie:esp,
+    porcentaje:(parseFloat(document.getElementById('exp-'+esp.replace(/\s/g,'_')).value)||0)/100
+  }));
+  await fetch('/api/exportable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  showAlert('Porcentajes guardados ✅');
+}
+
+
+
+
 async function saveExportable() {
   const payload=(window._expEspecies||[]).map(esp=>({
     especie:esp,
@@ -992,7 +1115,7 @@ async function loadPpto() {
     <th class="num" style="background:#1e40af">💼 USD Pack.</th>
     <th class="num" style="background:#0c4a6e">❄️ USD Frío</th>
     <th class="num" style="background:#5b21b6">💰 USD Total</th>
-    <th class="num">Tasa</th><th class="num">Ingreso CLP</th>
+    <th class="num">Tasa</th><th class="num">Ingreso ${monedaActual}</th>
   </tr></thead><tbody>
     ${data.map(r=>`<tr>
       <td><strong>${r.periodo}</strong></td>
