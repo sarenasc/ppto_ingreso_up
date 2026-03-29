@@ -85,6 +85,14 @@
   .btn-outline:hover { background: var(--bg); }
   .btn-sm { padding: 5px 10px; font-size: 12px; }
   .btn-xs { padding: 3px 8px; font-size: 11px; }
+  .btn-del-ing {
+    position: absolute; top: 2px; right: 2px;
+    background: transparent; border: none; color: #e53e3e;
+    font-size: 10px; cursor: pointer; padding: 1px 3px;
+    line-height: 1; border-radius: 3px; opacity: 0;
+    transition: opacity 0.15s;
+  }
+  td:hover .btn-del-ing { opacity: 1; }
 
   /* TABLES */
   .table-wrap { overflow-x: auto; }
@@ -1520,6 +1528,9 @@ function renderTablaIngreso() {
       const editBtn = reg
         ? `onclick="editarIngreso(${reg.id},'${d.exportadora}','${d.especie}',${m},'${d.temporada||''}',${reg.usd_packing},${reg.usd_frio})"`
         : `onclick="precargarFormIngreso('${d.exportadora}','${d.especie}',${m},'${d.temporada||''}')"`;
+      const delBtn = reg
+        ? `<button class="btn-del-ing" onclick="event.stopPropagation();eliminarIngreso(${reg.id})" title="Eliminar">✕</button>`
+        : '';
       return `
         <td class="num" style="${bg};cursor:pointer" ${editBtn} title="Click para editar">
           ${pack!==null?'$'+fmt(pack,0):'<span style=\"color:#d1d5db\">—</span>'}
@@ -1527,8 +1538,8 @@ function renderTablaIngreso() {
         <td class="num" style="${bg};cursor:pointer" ${editBtn} title="Click para editar">
           ${frio!==null?'$'+fmt(frio,0):'<span style=\"color:#d1d5db\">—</span>'}
         </td>
-        <td class="num" style="${bg};cursor:pointer;font-weight:600" ${editBtn} title="Click para editar">
-          ${tot!==null?'$'+fmt(tot,0):'<span style=\"color:#d1d5db\">—</span>'}
+        <td class="num" style="${bg};cursor:pointer;font-weight:600;position:relative" ${editBtn} title="Click para editar">
+          ${tot!==null?'$'+fmt(tot,0):'<span style=\"color:#d1d5db\">—</span>'}${delBtn}
         </td>`;
     }).join('');
 
@@ -1617,6 +1628,12 @@ function editarIngreso(id, exp, esp, mes, tmp, pack, frio) {
   document.getElementById('ing-btn-guardar').textContent = '💾 Actualizar';
   recalcIngTotal();
   document.querySelector('#page-ingreso .card').scrollIntoView({behavior:'smooth'});
+}
+
+async function eliminarIngreso(id) {
+  if (!confirm('¿Eliminar este registro de ingreso?')) return;
+  await fetch('/api/ingreso/'+id, {method:'DELETE'});
+  await cargarDatosIngreso();
 }
 
 function limpiarFormIngreso() {
