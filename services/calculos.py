@@ -91,6 +91,60 @@ def load_calc_data() -> tuple[list, list, dict, dict]:
     return rows, tasas, unitarios, exportable
 
 
+def load_ingreso_data() -> dict:
+    """
+    Carga los ingresos manuales USD desde ppto_ingreso_usd.
+    Devuelve dict: {(exportadora, especie, mes): {usd_packing, usd_frio, usd_total}}
+    Solo toma la temporada mas reciente si hay multiples para la misma combinacion.
+    """
+    schema = CFG['DB_SCHEMA']
+    db     = get_db()
+    with db.get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT exportadora, especie, mes,
+                   usd_packing, usd_frio, usd_total
+            FROM {schema}.ppto_ingreso_usd
+            ORDER BY temporada DESC, actualizado_en DESC
+        """)
+        rows = db.fetchall_dicts(cur)
+
+    # Si hay duplicados (distintas temporadas para la misma combinacion),
+    # el ORDER BY garantiza que el mas reciente queda primero → usamos setdefault
+    ingreso_map = {}
+    for r in rows:
+        key = (r['exportadora'], r['especie'], r['mes'])
+        ingreso_map.setdefault(key, {
+            'usd_packing': float(r['usd_packing'] or 0),
+            'usd_frio':    float(r['usd_frio']    or 0),
+            'usd_total':   float(r['usd_total']   or 0),
+        })
+    return ingreso_map
+
+
+def aplicar_ingreso_manual(calc: dict, ingreso_map: dict,
+                            exportadora: str, especie: str, mes: int) -> dict:
+    """
+    Si existe un ingreso manual para (exportadora, especie, mes),
+    reemplaza los valores USD calculados.
+    Los kgs y kg_export NO cambian (siguen siendo del Excel).
+    El clp_total se recalcula con el usd_total manual × tasa.
+    """
+    key = (exportadora, especie, mes)
+    if key not in ingreso_map:
+        return calc   # sin override, devuelve el calculo normal
+
+    ing = ingreso_map[key]
+    tasa = calc['tasa']
+    manual = dict(calc)
+    manual['usd_packing'] = ing['usd_packing']
+    manual['usd_frio']    = ing['usd_frio']
+    manual['usd_total']   = ing['usd_total']
+    manual['clp_total']   = ing['usd_total'] * tasa if tasa else 0.0
+    manual['es_manual']   = True
+    return manual
+
+
 # ── Calculo de tasa ───────────────────────────────────────────────────
 def get_tasa_for_row(tasas, fecha_str, semana, mes, moneda='CLP'):
     tasas_m = [t for t in tasas if (t.get('moneda') or 'CLP').upper() == moneda.upper()]

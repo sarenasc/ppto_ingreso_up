@@ -95,6 +95,18 @@ def save_ingreso():
             record_id = existing[0]
         else:
             if engine == 'sqlserver':
+                # OUTPUT INSERTED.id devuelve el ID en la misma sentencia
+                cur.execute(db.norm(f"""
+                    INSERT INTO {schema}.ppto_ingreso_usd
+                        (temporada, exportadora, especie, mes,
+                         usd_packing, usd_frio, usd_total, actualizado_en, usuario)
+                    OUTPUT INSERTED.id
+                    VALUES (?,?,?,?,?,?,?,?,?)
+                """), (temporada, exportadora, especie, int(mes),
+                       usd_packing, usd_frio, usd_total, now, usuario))
+                row = cur.fetchone()
+                record_id = int(row[0]) if row and row[0] is not None else 0
+            elif engine == 'mysql':
                 cur.execute(db.norm(f"""
                     INSERT INTO {schema}.ppto_ingreso_usd
                         (temporada, exportadora, especie, mes,
@@ -102,18 +114,21 @@ def save_ingreso():
                     VALUES (?,?,?,?,?,?,?,?,?)
                 """), (temporada, exportadora, especie, int(mes),
                        usd_packing, usd_frio, usd_total, now, usuario))
-                cur.execute("SELECT SCOPE_IDENTITY()")
-                record_id = int(cur.fetchone()[0])
+                cur.execute("SELECT LAST_INSERT_ID()")
+                row = cur.fetchone()
+                record_id = int(row[0]) if row and row[0] is not None else 0
             else:
+                # PostgreSQL
                 cur.execute(db.norm(f"""
                     INSERT INTO {schema}.ppto_ingreso_usd
                         (temporada, exportadora, especie, mes,
                          usd_packing, usd_frio, usd_total, actualizado_en, usuario)
                     VALUES (?,?,?,?,?,?,?,?,?)
+                    RETURNING id
                 """), (temporada, exportadora, especie, int(mes),
                        usd_packing, usd_frio, usd_total, now, usuario))
-                cur.execute("SELECT LAST_INSERT_ID()" if engine == 'mysql' else "SELECT lastval()")
-                record_id = int(cur.fetchone()[0])
+                row = cur.fetchone()
+                record_id = int(row[0]) if row and row[0] is not None else 0
 
     return jsonify({
         'ok':        True,

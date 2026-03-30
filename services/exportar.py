@@ -16,6 +16,7 @@ def build_excel(
     exportable: dict,
     ver_row,
     moneda:     str = 'CLP',
+    ingreso_map: dict | None = None,
 ) -> io.BytesIO:
     """
     Construye el Excel con 3 hojas:
@@ -53,10 +54,15 @@ def build_excel(
 
     # ── Data map: especie → mes → métricas ───────────────────────────
     data_map: dict = {}
+    from services.calculos import aplicar_ingreso_manual
+    _ing = ingreso_map or {}
+
     for row in rows:
-        esp = row.get('especie') or 'Sin Especie'
-        mes = row.get('mes') or 0
+        esp         = row.get('especie')     or 'Sin Especie'
+        exportadora = row.get('exportadora') or ''
+        mes         = row.get('mes') or 0
         c   = calcular_fila(row, unitarios, exportable, tasas, moneda)
+        c   = aplicar_ingreso_manual(c, _ing, exportadora, esp, mes)
         data_map.setdefault(esp, {})
         data_map[esp].setdefault(mes, {'kgs': 0, 'ke': 0, 'upk': 0, 'ufr': 0, 'ut': 0, 'mon': 0})
         m = data_map[esp][mes]
