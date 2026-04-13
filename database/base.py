@@ -64,7 +64,7 @@ class BaseAdapter(ABC):
         """Inserta o actualiza un registro en ppto_unitarios."""
 
     @abstractmethod
-    def upsert_exportable(self, cur, schema: str, especie: str,
+    def upsert_exportable(self, cur, schema: str, exportadora: str, especie: str,
                           porcentaje: float, now: datetime) -> None:
         """Inserta o actualiza un registro en ppto_exportable_pct."""
 
@@ -74,8 +74,8 @@ class BaseAdapter(ABC):
         """Inserta en ppto_unitarios solo si no existe (para el upload)."""
 
     @abstractmethod
-    def ensure_exportable_exists(self, cur, schema: str, especie: str,
-                                 now: datetime) -> None:
+    def ensure_exportable_exists(self, cur, schema: str, exportadora: str,
+                                 especie: str, now: datetime) -> None:
         """Inserta en ppto_exportable_pct solo si no existe (para el upload)."""
 
     # ── Diagnóstico ──────────────────────────────────────────────────

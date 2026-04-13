@@ -85,6 +85,14 @@
   .btn-outline:hover { background: var(--bg); }
   .btn-sm { padding: 5px 10px; font-size: 12px; }
   .btn-xs { padding: 3px 8px; font-size: 11px; }
+  .btn-del-ing {
+    position: absolute; top: 2px; right: 2px;
+    background: transparent; border: none; color: #e53e3e;
+    font-size: 10px; cursor: pointer; padding: 1px 3px;
+    line-height: 1; border-radius: 3px; opacity: 0;
+    transition: opacity 0.15s;
+  }
+  td:hover .btn-del-ing { opacity: 1; }
 
   /* TABLES */
   .table-wrap { overflow-x: auto; }
@@ -497,7 +505,7 @@
             <button class="btn btn-outline btn-sm" onclick="limpiarFormIngreso()">↺ Nuevo</button>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr) 1fr 1fr auto;gap:10px;align-items:end">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr) 1fr 1fr 1fr auto;gap:10px;align-items:end">
           <div class="form-group" style="margin-bottom:0">
             <label>Exportadora <span style="color:var(--danger)">*</span></label>
             <select id="ing-exportadora">
@@ -528,6 +536,13 @@
           <div class="form-group" style="margin-bottom:0">
             <label>USD Frío</label>
             <input type="number" id="ing-usd-frio" placeholder="0" step="0.01" min="0"
+                   oninput="recalcIngTotal()">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label title="Tipo de cambio manual. Si se deja vacío se usa el TC configurado.">
+              TC CLP/USD <span style="font-size:10px;color:var(--muted)">(opcional)</span>
+            </label>
+            <input type="number" id="ing-tc" placeholder="auto" step="1" min="0"
                    oninput="recalcIngTotal()">
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;padding-bottom:1px">
@@ -715,6 +730,20 @@ let _selectedEngine  = 'sqlserver';
 function fmt(n, d=0) {
   if (n==null||isNaN(n)) return '—';
   return new Intl.NumberFormat('es-CL',{maximumFractionDigits:d,minimumFractionDigits:d}).format(n);
+}
+
+// ── Fetch con detección de sesión expirada ─────────────
+async function apiFetch(url, opts={}) {
+  const r = await fetch(url, opts);
+  if (r.redirected || r.url.includes('/login')) {
+    window.location.href = '/login';
+    throw new Error('session_expired');
+  }
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(text || `HTTP ${r.status}`);
+  }
+  return r;
 }
 function fmtUSD(n) { return n==null||isNaN(n)?'—':'$'+fmt(n,2); }
 function fmtMon(n) { return n==null||isNaN(n)?'—':fmt(n); }
@@ -915,8 +944,9 @@ let _unitariosData = [];
 async function loadUnitarios() {
   const el = document.getElementById('unitarios-form');
   try {
-    _unitariosData = await fetch('/api/unitarios/exportadoras').then(r=>r.json());
+    _unitariosData = await apiFetch('/api/unitarios/exportadoras').then(r=>r.json());
   } catch(e) {
+    if (e.message === 'session_expired') return;
     el.innerHTML='<div class="empty-state"><div class="icon">⚠️</div>Error al cargar precios</div>';
     return;
   }
@@ -953,14 +983,14 @@ async function loadUnitarios() {
           <tbody>
             ${items.map((u, ri) => {
               const k = (u.exportadora + '__' + u.especie).replace(/[^a-zA-Z0-9]/g,'_');
-              const tot = ((u.precio_usd_packing||0)+(u.precio_usd_frio||0)).toFixed(3);
+              const tot = ((u.precio_usd_packing||0)+(u.precio_usd_frio||0)).toFixed(4);
               const bg = ri%2===1 ? 'background:#fafafa' : '';
               return `<tr style="${bg}">
                 <td style="padding:8px 12px;font-weight:600;color:var(--primary)">🌿 ${u.especie}</td>
                 <td style="padding:6px 12px;text-align:center">
                   <div style="display:flex;align-items:center;justify-content:center;gap:0;max-width:160px;margin:auto">
                     <span style="padding:6px 8px;background:#dbeafe;border:1px solid #93c5fd;border-right:none;border-radius:6px 0 0 6px;color:#1e40af;font-size:11px;white-space:nowrap">USD</span>
-                    <input type="number" step="0.001" min="0" value="${u.precio_usd_packing||0}"
+                    <input type="number" step="0.0001" min="0" value="${u.precio_usd_packing||0}"
                            id="upk-${k}" style="border-radius:0 6px 6px 0;border-color:#93c5fd;width:90px;padding:6px 8px;text-align:right"
                            oninput="recalcTotU('${k}')">
                   </div>
@@ -968,7 +998,7 @@ async function loadUnitarios() {
                 <td style="padding:6px 12px;text-align:center">
                   <div style="display:flex;align-items:center;justify-content:center;gap:0;max-width:160px;margin:auto">
                     <span style="padding:6px 8px;background:#e0f2fe;border:1px solid #7dd3fc;border-right:none;border-radius:6px 0 0 6px;color:#0c4a6e;font-size:11px;white-space:nowrap">USD</span>
-                    <input type="number" step="0.001" min="0" value="${u.precio_usd_frio||0}"
+                    <input type="number" step="0.0001" min="0" value="${u.precio_usd_frio||0}"
                            id="ufr-${k}" style="border-radius:0 6px 6px 0;border-color:#7dd3fc;width:90px;padding:6px 8px;text-align:right"
                            oninput="recalcTotU('${k}')">
                   </div>
@@ -991,7 +1021,7 @@ function recalcTotU(k) {
   const pk = parseFloat(document.getElementById('upk-'+k)?.value)||0;
   const fr = parseFloat(document.getElementById('ufr-'+k)?.value)||0;
   const el = document.getElementById('tot-'+k);
-  if (el) el.textContent = '$'+(pk+fr).toFixed(3);
+  if (el) el.textContent = '$'+(pk+fr).toFixed(4);
 }
 
 async function saveUnitarios() {
@@ -1014,13 +1044,84 @@ async function saveUnitarios() {
   else showAlert('Error al guardar: '+(data.error||''),'error');
 }
 
+async function loadExportable() {
+  const el = document.getElementById('exportable-form');
+  let data;
+  try {
+    data = await fetch('/api/exportable/exportadoras').then(r => r.json());
+  } catch(e) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div>Error al cargar porcentajes</div>';
+    return;
+  }
+  if (!data.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📦</div>Carga una estimación primero para ver las combinaciones</div>';
+    return;
+  }
+
+  window._expCombos = data;
+
+  // Agrupar por exportadora
+  const porExp = {};
+  data.forEach(u => {
+    if (!porExp[u.exportadora]) porExp[u.exportadora] = [];
+    porExp[u.exportadora].push(u);
+  });
+
+  let html = '<div style="display:flex;flex-direction:column;gap:20px">';
+  Object.entries(porExp).forEach(([exp, items]) => {
+    html += `
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="background:var(--primary);padding:10px 16px;display:flex;align-items:center;gap:8px">
+        <span style="color:white;font-weight:700;font-size:14px">🏢 ${exp}</span>
+        <span style="color:rgba(255,255,255,.6);font-size:12px">${items.length} especie${items.length!==1?'s':''}</span>
+      </div>
+      <div style="padding:16px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr>
+              <th style="background:var(--bg);padding:8px 12px;text-align:left;font-weight:600;color:var(--primary);border-bottom:2px solid var(--border)">Especie</th>
+              <th style="background:#d1fae5;padding:8px 12px;text-align:center;font-weight:600;color:#065f46;border-bottom:2px solid #6ee7b7">% Exportable</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map((u, ri) => {
+              const k   = (u.exportadora + '__' + u.especie).replace(/[^a-zA-Z0-9]/g, '_');
+              const pct = ((u.porcentaje || 0) * 100).toFixed(2);
+              const bg  = ri % 2 === 1 ? 'background:#fafafa' : '';
+              return `<tr style="${bg}">
+                <td style="padding:8px 12px;font-weight:600;color:var(--primary)">🌿 ${u.especie}</td>
+                <td style="padding:6px 12px;text-align:center">
+                  <div style="display:flex;align-items:center;justify-content:center;gap:0;max-width:140px;margin:auto">
+                    <input type="number" step="0.01" min="0" max="100" value="${pct}"
+                           id="exp-${k}"
+                           style="border-radius:6px 0 0 6px;border:1px solid #6ee7b7;border-right:none;width:90px;padding:6px 8px;text-align:right">
+                    <span style="padding:6px 8px;background:#d1fae5;border:1px solid #6ee7b7;border-left:none;border-radius:0 6px 6px 0;color:#065f46;font-size:11px">%</span>
+                  </div>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
 async function saveExportable() {
-  const payload=(window._expEspecies||[]).map(esp=>({
-    especie:esp,
-    porcentaje:(parseFloat(document.getElementById('exp-'+esp.replace(/\s/g,'_')).value)||0)/100
-  }));
-  await fetch('/api/exportable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  showAlert('Porcentajes guardados ✅');
+  const payload = (window._expCombos || []).map(u => {
+    const k = (u.exportadora + '__' + u.especie).replace(/[^a-zA-Z0-9]/g, '_');
+    return {
+      exportadora: u.exportadora,
+      especie:     u.especie,
+      porcentaje:  (parseFloat(document.getElementById('exp-' + k)?.value) || 0) / 100,
+    };
+  });
+  const res  = await fetch('/api/exportable', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  const data = await res.json();
+  if (data.ok) showAlert('Porcentajes guardados ✅');
+  else showAlert('Error al guardar: ' + (data.error || ''), 'error');
 }
 
 // ════════════════════════════════════════════════════════
@@ -1428,12 +1529,13 @@ function renderTablaIngreso() {
 
   // Headers de columnas meses
   const colHeaders = mesesDisp.map(m =>
-    `<th class="num" colspan="3" style="background:var(--primary-light)">${(MESES_NOM_ING[m]||m+'').substring(0,3).toUpperCase()}</th>`
+    `<th class="num" colspan="4" style="background:var(--primary-light)">${(MESES_NOM_ING[m]||m+'').substring(0,3).toUpperCase()}</th>`
   ).join('');
   const subHeaders = mesesDisp.map(() =>
     `<th class="num" style="background:#2d6a9f;font-size:10px">Pack.</th>
      <th class="num" style="background:#1a5276;font-size:10px">Frío</th>
-     <th class="num" style="background:#1a3a5c;font-size:10px">Total</th>`
+     <th class="num" style="background:#1a3a5c;font-size:10px">Total</th>
+     <th class="num" style="background:#065f46;font-size:10px">TC</th>`
   ).join('');
 
   const filas = filaKeys.map((fk, ri) => {
@@ -1441,14 +1543,17 @@ function renderTablaIngreso() {
     const shade = ri%2===1;
     const bg = shade ? 'background:#f8fafc' : '';
     const celdas = mesesDisp.map(m => {
-      const reg = d.meses[m];
+      const reg  = d.meses[m];
       const pack = reg ? reg.usd_packing : null;
       const frio = reg ? reg.usd_frio    : null;
       const tot  = reg ? reg.usd_total   : null;
-      const rid  = reg ? reg.id          : null;
+      const tc   = (reg && reg.tc !== null && reg.tc !== undefined) ? reg.tc : null;
       const editBtn = reg
-        ? `onclick="editarIngreso(${reg.id},'${d.exportadora}','${d.especie}',${m},'${d.temporada||''}',${reg.usd_packing},${reg.usd_frio})"`
+        ? `onclick="editarIngreso(${reg.id},'${d.exportadora}','${d.especie}',${m},'${d.temporada||''}',${reg.usd_packing},${reg.usd_frio},${tc !== null ? tc : 'null'})"`
         : `onclick="precargarFormIngreso('${d.exportadora}','${d.especie}',${m},'${d.temporada||''}')"`;
+      const delBtn = reg
+        ? `<button class="btn-del-ing" onclick="event.stopPropagation();eliminarIngreso(${reg.id})" title="Eliminar">✕</button>`
+        : '';
       return `
         <td class="num" style="${bg};cursor:pointer" ${editBtn} title="Click para editar">
           ${pack!==null?'$'+fmt(pack,0):'<span style=\"color:#d1d5db\">—</span>'}
@@ -1456,8 +1561,11 @@ function renderTablaIngreso() {
         <td class="num" style="${bg};cursor:pointer" ${editBtn} title="Click para editar">
           ${frio!==null?'$'+fmt(frio,0):'<span style=\"color:#d1d5db\">—</span>'}
         </td>
-        <td class="num" style="${bg};cursor:pointer;font-weight:600" ${editBtn} title="Click para editar">
-          ${tot!==null?'$'+fmt(tot,0):'<span style=\"color:#d1d5db\">—</span>'}
+        <td class="num" style="${bg};cursor:pointer;font-weight:600;position:relative" ${editBtn} title="Click para editar">
+          ${tot!==null?'$'+fmt(tot,0):'<span style=\"color:#d1d5db\">—</span>'}${delBtn}
+        </td>
+        <td class="num" style="${bg};cursor:pointer;color:#065f46;font-size:12px" ${editBtn} title="TC manual — click para editar">
+          ${tc!==null?fmt(tc,0):'<span style=\"color:#d1d5db\">auto</span>'}
         </td>`;
     }).join('');
 
@@ -1477,7 +1585,8 @@ function renderTablaIngreso() {
       ${mesesDisp.map(m=>`
         <td class="num">$${fmt(totPack[m],0)}</td>
         <td class="num">$${fmt(totFrio[m],0)}</td>
-        <td class="num" style="font-weight:700">$${fmt(totTot[m],0)}</td>`).join('')}
+        <td class="num" style="font-weight:700">$${fmt(totTot[m],0)}</td>
+        <td class="num" style="color:#9ca3af;font-size:11px">—</td>`).join('')}
       <td class="num" style="font-weight:700;color:#5b21b6">$${fmt(grandTotal,0)}</td>
     </tr>`;
 
@@ -1494,7 +1603,7 @@ function renderTablaIngreso() {
             <th rowspan="2">Especie</th>
             <th rowspan="2">Temporada</th>
             ${colHeaders}
-            <th rowspan="2" class="num" style="background:#5b21b6">TOTAL</th>
+            <th rowspan="2" class="num" style="background:#5b21b6;min-width:90px">TOTAL USD</th>
           </tr>
           <tr>${subHeaders}</tr>
         </thead>
@@ -1516,9 +1625,16 @@ function renderTablaIngreso() {
 }
 
 function recalcIngTotal() {
-  const pk = parseFloat(document.getElementById('ing-usd-packing').value)||0;
-  const fr = parseFloat(document.getElementById('ing-usd-frio').value)||0;
-  document.getElementById('ing-total-badge').textContent = 'Total: $'+fmt(pk+fr,2);
+  const pk  = parseFloat(document.getElementById('ing-usd-packing').value)||0;
+  const fr  = parseFloat(document.getElementById('ing-usd-frio').value)||0;
+  const tc  = parseFloat(document.getElementById('ing-tc').value)||null;
+  const tot = pk + fr;
+  const badge = document.getElementById('ing-total-badge');
+  if (tc) {
+    badge.innerHTML = `Total: $${fmt(tot,2)}<br><span style="font-size:10px;font-weight:400">CLP: ${fmt(tot*tc,0)}</span>`;
+  } else {
+    badge.textContent = 'Total: $'+fmt(tot,2);
+  }
 }
 
 function precargarFormIngreso(exp, esp, mes, tmp) {
@@ -1528,24 +1644,31 @@ function precargarFormIngreso(exp, esp, mes, tmp) {
   document.getElementById('ing-temporada-txt').value  = tmp;
   document.getElementById('ing-usd-packing').value    = '';
   document.getElementById('ing-usd-frio').value       = '';
+  document.getElementById('ing-tc').value             = '';
   document.getElementById('ing-edit-id').value        = '';
   document.getElementById('ing-total-badge').textContent = 'Total: $0';
   document.getElementById('ing-btn-guardar').textContent = '💾 Guardar';
-  // Scroll al formulario
   document.querySelector('#page-ingreso .card').scrollIntoView({behavior:'smooth'});
 }
 
-function editarIngreso(id, exp, esp, mes, tmp, pack, frio) {
+function editarIngreso(id, exp, esp, mes, tmp, pack, frio, tc) {
   document.getElementById('ing-exportadora').value    = exp;
   document.getElementById('ing-especie').value        = esp;
   document.getElementById('ing-mes').value            = mes;
   document.getElementById('ing-temporada-txt').value  = tmp;
   document.getElementById('ing-usd-packing').value    = pack;
   document.getElementById('ing-usd-frio').value       = frio;
+  document.getElementById('ing-tc').value             = (tc !== null && tc !== undefined && tc !== '') ? tc : '';
   document.getElementById('ing-edit-id').value        = id;
   document.getElementById('ing-btn-guardar').textContent = '💾 Actualizar';
   recalcIngTotal();
   document.querySelector('#page-ingreso .card').scrollIntoView({behavior:'smooth'});
+}
+
+async function eliminarIngreso(id) {
+  if (!confirm('¿Eliminar este registro de ingreso?')) return;
+  await fetch('/api/ingreso/'+id, {method:'DELETE'});
+  await cargarDatosIngreso();
 }
 
 function limpiarFormIngreso() {
@@ -1555,6 +1678,7 @@ function limpiarFormIngreso() {
   document.getElementById('ing-temporada-txt').value = '';
   document.getElementById('ing-usd-packing').value   = '';
   document.getElementById('ing-usd-frio').value      = '';
+  document.getElementById('ing-tc').value            = '';
   document.getElementById('ing-edit-id').value       = '';
   document.getElementById('ing-total-badge').textContent = 'Total: $0';
   document.getElementById('ing-btn-guardar').textContent = '💾 Guardar';
@@ -1572,6 +1696,7 @@ async function guardarIngreso() {
   if (!esp) { showIngAlert('Selecciona la especie','error'); return; }
   if (!mes) { showIngAlert('Selecciona el mes','error'); return; }
 
+  const tcVal = parseFloat(document.getElementById('ing-tc').value) || null;
   const payload = {
     temporada:    tmp,
     exportadora:  exp,
@@ -1579,6 +1704,7 @@ async function guardarIngreso() {
     mes:          parseInt(mes),
     usd_packing:  parseFloat(pk)||0,
     usd_frio:     parseFloat(fr)||0,
+    tc:           tcVal,
   };
 
   const btn = document.getElementById('ing-btn-guardar');
@@ -1586,11 +1712,12 @@ async function guardarIngreso() {
   btn.innerHTML = '<span class="spinner"></span>';
 
   try {
-    const data = await fetch('/api/ingreso', {
+    const res  = await fetch('/api/ingreso', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(payload)
-    }).then(r=>r.json());
+    });
+    const data = await res.json().catch(()=>({error:`Error del servidor (HTTP ${res.status})`}));
 
     if (data.ok) {
       showIngAlert(`Guardado correctamente. USD Total: $${fmt(data.usd_total,2)}`, 'success');

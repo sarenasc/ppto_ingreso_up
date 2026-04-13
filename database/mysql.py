@@ -45,15 +45,15 @@ class MySQLAdapter(BaseAdapter):
                 actualizado_en     = VALUES(actualizado_en)
         """), (especie, packing, frio, now))
 
-    def upsert_exportable(self, cur, schema, especie, porcentaje, now):
+    def upsert_exportable(self, cur, schema, exportadora, especie, porcentaje, now):
         cur.execute(self.norm(f"""
             INSERT INTO {schema}.ppto_exportable_pct
-                (especie, porcentaje, actualizado_en)
-            VALUES (?, ?, ?)
+                (exportadora, especie, porcentaje, actualizado_en)
+            VALUES (?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 porcentaje     = VALUES(porcentaje),
                 actualizado_en = VALUES(actualizado_en)
-        """), (especie, porcentaje, now))
+        """), (exportadora, especie, porcentaje, now))
 
     def ensure_unitario_exists(self, cur, schema, especie, now):
         cur.execute(self.norm(f"""
@@ -62,12 +62,12 @@ class MySQLAdapter(BaseAdapter):
             VALUES (?, 0, 0, ?)
         """), (especie, now))
 
-    def ensure_exportable_exists(self, cur, schema, especie, now):
+    def ensure_exportable_exists(self, cur, schema, exportadora, especie, now):
         cur.execute(self.norm(f"""
             INSERT IGNORE INTO {schema}.ppto_exportable_pct
-                (especie, porcentaje, actualizado_en)
-            VALUES (?, 0.8, ?)
-        """), (especie, now))
+                (exportadora, especie, porcentaje, actualizado_en)
+            VALUES (?, ?, 0.8, ?)
+        """), (exportadora, especie, now))
 
     # ── Diagnóstico ──────────────────────────────────────────────────
     def test_connection(self) -> tuple[bool, str]:

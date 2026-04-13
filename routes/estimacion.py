@@ -103,7 +103,7 @@ def upload():
                             WHERE exportadora=? AND especie=?
                         )
                     """), (str(exp_val), str(esp_val), now, str(exp_val), str(esp_val)))
-                db.ensure_exportable_exists(cur, schema, str(esp_val), now)
+                db.ensure_exportable_exists(cur, schema, str(exp_val), str(esp_val), now)
 
         # Guardar copia física del archivo
         try:

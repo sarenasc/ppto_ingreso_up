@@ -27,7 +27,7 @@ def get_ingresos():
         cur = conn.cursor()
         cur.execute(f"""
             SELECT id, temporada, exportadora, especie, mes,
-                   usd_packing, usd_frio, usd_total,
+                   usd_packing, usd_frio, usd_total, tc,
                    CAST(actualizado_en AS VARCHAR(19)) AS actualizado_en,
                    usuario
             FROM {schema}.ppto_ingreso_usd
@@ -66,6 +66,8 @@ def save_ingreso():
     usd_packing = float(data.get('usd_packing') or 0)
     usd_frio    = float(data.get('usd_frio')    or 0)
     usd_total   = usd_packing + usd_frio
+    tc_raw      = data.get('tc')
+    tc          = float(tc_raw) if tc_raw not in (None, '', 0, '0') else None
 
     schema  = CFG['DB_SCHEMA']
     db      = get_db()
@@ -75,66 +77,71 @@ def save_ingreso():
     from flask import session
     usuario = session.get('username', 'sistema')
 
-    with db.get_conn() as conn:
-        cur = conn.cursor()
+    try:
+        with db.get_conn() as conn:
+            cur = conn.cursor()
 
-        # Verificar si ya existe registro para esa combinacion
-        cur.execute(db.norm(f"""
-            SELECT id FROM {schema}.ppto_ingreso_usd
-            WHERE exportadora=? AND especie=? AND mes=? AND temporada=?
-        """), (exportadora, especie, int(mes), temporada))
-        existing = cur.fetchone()
-
-        if existing:
+            # Verificar si ya existe registro para esa combinacion
             cur.execute(db.norm(f"""
-                UPDATE {schema}.ppto_ingreso_usd
-                SET usd_packing=?, usd_frio=?, usd_total=?,
-                    actualizado_en=?, usuario=?
-                WHERE id=?
-            """), (usd_packing, usd_frio, usd_total, now, usuario, existing[0]))
-            record_id = existing[0]
-        else:
-            if engine == 'sqlserver':
-                # OUTPUT INSERTED.id devuelve el ID en la misma sentencia
-                cur.execute(db.norm(f"""
-                    INSERT INTO {schema}.ppto_ingreso_usd
-                        (temporada, exportadora, especie, mes,
-                         usd_packing, usd_frio, usd_total, actualizado_en, usuario)
-                    OUTPUT INSERTED.id
-                    VALUES (?,?,?,?,?,?,?,?,?)
-                """), (temporada, exportadora, especie, int(mes),
-                       usd_packing, usd_frio, usd_total, now, usuario))
-                row = cur.fetchone()
-                record_id = int(row[0]) if row and row[0] is not None else 0
-            elif engine == 'mysql':
-                cur.execute(db.norm(f"""
-                    INSERT INTO {schema}.ppto_ingreso_usd
-                        (temporada, exportadora, especie, mes,
-                         usd_packing, usd_frio, usd_total, actualizado_en, usuario)
-                    VALUES (?,?,?,?,?,?,?,?,?)
-                """), (temporada, exportadora, especie, int(mes),
-                       usd_packing, usd_frio, usd_total, now, usuario))
-                cur.execute("SELECT LAST_INSERT_ID()")
-                row = cur.fetchone()
-                record_id = int(row[0]) if row and row[0] is not None else 0
-            else:
-                # PostgreSQL
-                cur.execute(db.norm(f"""
-                    INSERT INTO {schema}.ppto_ingreso_usd
-                        (temporada, exportadora, especie, mes,
-                         usd_packing, usd_frio, usd_total, actualizado_en, usuario)
-                    VALUES (?,?,?,?,?,?,?,?,?)
-                    RETURNING id
-                """), (temporada, exportadora, especie, int(mes),
-                       usd_packing, usd_frio, usd_total, now, usuario))
-                row = cur.fetchone()
-                record_id = int(row[0]) if row and row[0] is not None else 0
+                SELECT id FROM {schema}.ppto_ingreso_usd
+                WHERE exportadora=? AND especie=? AND mes=? AND temporada=?
+            """), (exportadora, especie, int(mes), temporada))
+            existing = cur.fetchone()
 
-    return jsonify({
-        'ok':        True,
-        'id':        record_id,
-        'usd_total': usd_total,
-    })
+            if existing:
+                cur.execute(db.norm(f"""
+                    UPDATE {schema}.ppto_ingreso_usd
+                    SET usd_packing=?, usd_frio=?, usd_total=?, tc=?,
+                        actualizado_en=?, usuario=?
+                    WHERE id=?
+                """), (usd_packing, usd_frio, usd_total, tc, now, usuario, existing[0]))
+                record_id = existing[0]
+            else:
+                if engine == 'sqlserver':
+                    cur.execute(db.norm(f"""
+                        INSERT INTO {schema}.ppto_ingreso_usd
+                            (temporada, exportadora, especie, mes,
+                             usd_packing, usd_frio, usd_total, tc, actualizado_en, usuario)
+                        OUTPUT INSERTED.id
+                        VALUES (?,?,?,?,?,?,?,?,?,?)
+                    """), (temporada, exportadora, especie, int(mes),
+                           usd_packing, usd_frio, usd_total, tc, now, usuario))
+                    row = cur.fetchone()
+                    record_id = int(row[0]) if row and row[0] is not None else 0
+                elif engine == 'mysql':
+                    cur.execute(db.norm(f"""
+                        INSERT INTO {schema}.ppto_ingreso_usd
+                            (temporada, exportadora, especie, mes,
+                             usd_packing, usd_frio, usd_total, tc, actualizado_en, usuario)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)
+                    """), (temporada, exportadora, especie, int(mes),
+                           usd_packing, usd_frio, usd_total, tc, now, usuario))
+                    cur.execute("SELECT LAST_INSERT_ID()")
+                    row = cur.fetchone()
+                    record_id = int(row[0]) if row and row[0] is not None else 0
+                else:
+                    # PostgreSQL
+                    cur.execute(db.norm(f"""
+                        INSERT INTO {schema}.ppto_ingreso_usd
+                            (temporada, exportadora, especie, mes,
+                             usd_packing, usd_frio, usd_total, tc, actualizado_en, usuario)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)
+                        RETURNING id
+                    """), (temporada, exportadora, especie, int(mes),
+                           usd_packing, usd_frio, usd_total, tc, now, usuario))
+                    row = cur.fetchone()
+                    record_id = int(row[0]) if row and row[0] is not None else 0
+
+        return jsonify({
+            'ok':        True,
+            'id':        record_id,
+            'usd_total': usd_total,
+        })
+
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 
 @bp.route('/<int:rid>', methods=['DELETE'])
@@ -232,7 +239,7 @@ def get_resumen():
         cur = conn.cursor()
         cur.execute(db.norm(f"""
             SELECT id, temporada, exportadora, especie, mes,
-                   usd_packing, usd_frio, usd_total,
+                   usd_packing, usd_frio, usd_total, tc,
                    CAST(actualizado_en AS VARCHAR(19)) AS actualizado_en,
                    usuario
             FROM {schema}.ppto_ingreso_usd

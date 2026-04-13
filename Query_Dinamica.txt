@@ -1,0 +1,68 @@
+-- Valores calculados automáticamente (base)
+-- Si existe un ingreso manual para (exportadora, especie, mes):
+--   · usd_packing / usd_frio / usd_total se reemplazan por el valor ingresado
+--   · tc (tipo de cambio): si se ingresó manualmente, reemplaza al calculado automático
+--   · clp = usd_total_final * tasa_final
+
+SELECT
+    e.temporada, e.exportadora, e.especie, e.variedad, e.productor, e.grupo,
+    e.fecha, e.semana, e.mes, e.envase, e.kgs_a_proc,
+    ISNULL(ep.porcentaje, 0)                                                           AS pct_export,
+    e.kgs_a_proc * ISNULL(ep.porcentaje, 0)                                            AS kg_export,
+    ISNULL(u.precio_usd_packing, 0)                                                    AS p_unit_packing,
+    ISNULL(u.precio_usd_frio, 0)                                                       AS p_unit_frio,
+    ISNULL(u.precio_usd_packing, 0) + ISNULL(u.precio_usd_frio, 0)                    AS unitario_total,
+    -- USD: ingreso manual tiene prioridad; si no hay, se calcula
+    ISNULL(ing.usd_packing, e.kgs_a_proc * ISNULL(u.precio_usd_packing, 0))           AS usd_packing,
+    ISNULL(ing.usd_frio,    e.kgs_a_proc * ISNULL(u.precio_usd_frio,    0))           AS usd_frio,
+    ISNULL(ing.usd_total,   e.kgs_a_proc * (ISNULL(u.precio_usd_packing, 0)
+                                           + ISNULL(u.precio_usd_frio,   0)))          AS usd_total,
+    -- TC: si se ingresó tc manual, tiene prioridad sobre el calculado automático
+    ISNULL(ing.tc, ISNULL(t.valor, 0))                                                 AS tasa_clp_usd,
+    ing.tc                                                                             AS tc_manual,
+    -- CLP: usd_final × tasa_final
+    ISNULL(ing.usd_packing, e.kgs_a_proc * ISNULL(u.precio_usd_packing, 0))
+        * ISNULL(ing.tc, ISNULL(t.valor, 0))                                           AS clp_packing,
+    ISNULL(ing.usd_frio,    e.kgs_a_proc * ISNULL(u.precio_usd_frio,    0))
+        * ISNULL(ing.tc, ISNULL(t.valor, 0))                                           AS clp_frio,
+    ISNULL(ing.usd_total,   e.kgs_a_proc * (ISNULL(u.precio_usd_packing, 0)
+                                           + ISNULL(u.precio_usd_frio,   0)))
+        * ISNULL(ing.tc, ISNULL(t.valor, 0))                                           AS clp_total,
+    CASE WHEN ing.usd_total IS NOT NULL THEN 1 ELSE 0 END                              AS es_manual,
+    CASE WHEN ing.tc        IS NOT NULL THEN 1 ELSE 0 END                              AS tc_es_manual
+FROM dbo.ppto_estimacion e
+LEFT JOIN dbo.ppto_exportable_pct ep
+    ON  ep.exportadora = e.exportadora
+    AND ep.especie     = e.especie
+LEFT JOIN dbo.ppto_unitarios u
+    ON  u.exportadora  = e.exportadora
+    AND u.especie      = e.especie
+-- Ingreso manual más reciente para (exportadora, especie, mes)
+OUTER APPLY (
+    SELECT TOP 1 usd_packing, usd_frio, usd_total, tc
+    FROM dbo.ppto_ingreso_usd i
+    WHERE i.exportadora = e.exportadora
+      AND i.especie     = e.especie
+      AND i.mes         = e.mes
+    ORDER BY i.temporada DESC, i.actualizado_en DESC
+) ing
+-- TC automático (solo se usa si ing.tc es NULL)
+OUTER APPLY (
+    SELECT TOP 1 valor
+    FROM dbo.ppto_tasas_cambio tc
+    WHERE tc.activo = 1
+      AND tc.moneda = 'CLP'
+      AND (
+          (tc.tipo = 'rango'   AND e.fecha  BETWEEN tc.fecha_inicio AND tc.fecha_fin)
+       OR (tc.tipo = 'semanal' AND tc.semana = e.semana)
+       OR (tc.tipo = 'mensual' AND tc.mes    = e.mes)
+       OR (tc.tipo = 'anual')
+      )
+    ORDER BY CASE tc.tipo
+        WHEN 'rango'   THEN 1
+        WHEN 'semanal' THEN 2
+        WHEN 'mensual' THEN 3
+        WHEN 'anual'   THEN 4
+    END ASC
+) t
+WHERE e.numero_version = (SELECT MAX(numero_version) FROM dbo.ppto_version_log)

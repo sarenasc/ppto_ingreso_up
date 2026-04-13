@@ -44,15 +44,15 @@ class PostgreSQLAdapter(BaseAdapter):
                 actualizado_en     = EXCLUDED.actualizado_en
         """), (especie, packing, frio, now))
 
-    def upsert_exportable(self, cur, schema, especie, porcentaje, now):
+    def upsert_exportable(self, cur, schema, exportadora, especie, porcentaje, now):
         cur.execute(self.norm(f"""
             INSERT INTO {schema}.ppto_exportable_pct
-                (especie, porcentaje, actualizado_en)
-            VALUES (?, ?, ?)
-            ON CONFLICT (especie) DO UPDATE SET
+                (exportadora, especie, porcentaje, actualizado_en)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (exportadora, especie) DO UPDATE SET
                 porcentaje     = EXCLUDED.porcentaje,
                 actualizado_en = EXCLUDED.actualizado_en
-        """), (especie, porcentaje, now))
+        """), (exportadora, especie, porcentaje, now))
 
     def ensure_unitario_exists(self, cur, schema, especie, now):
         cur.execute(self.norm(f"""
@@ -62,13 +62,13 @@ class PostgreSQLAdapter(BaseAdapter):
             ON CONFLICT (especie) DO NOTHING
         """), (especie, now))
 
-    def ensure_exportable_exists(self, cur, schema, especie, now):
+    def ensure_exportable_exists(self, cur, schema, exportadora, especie, now):
         cur.execute(self.norm(f"""
             INSERT INTO {schema}.ppto_exportable_pct
-                (especie, porcentaje, actualizado_en)
-            VALUES (?, 0.8, ?)
-            ON CONFLICT (especie) DO NOTHING
-        """), (especie, now))
+                (exportadora, especie, porcentaje, actualizado_en)
+            VALUES (?, ?, 0.8, ?)
+            ON CONFLICT (exportadora, especie) DO NOTHING
+        """), (exportadora, especie, now))
 
     # ── Diagnóstico ──────────────────────────────────────────────────
     def test_connection(self) -> tuple[bool, str]:

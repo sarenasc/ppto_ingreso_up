@@ -84,9 +84,12 @@ def load_calc_data() -> tuple[list, list, dict, dict]:
         }
 
         cur.execute(
-            f"SELECT especie, porcentaje FROM {schema}.ppto_exportable_pct"
+            f"SELECT exportadora, especie, porcentaje FROM {schema}.ppto_exportable_pct"
         )
-        exportable = {r['especie']: r['porcentaje'] for r in db.fetchall_dicts(cur)}
+        exportable = {
+            (r['exportadora'], r['especie']): r['porcentaje']
+            for r in db.fetchall_dicts(cur)
+        }
 
     return rows, tasas, unitarios, exportable
 
@@ -103,7 +106,7 @@ def load_ingreso_data() -> dict:
         cur = conn.cursor()
         cur.execute(f"""
             SELECT exportadora, especie, mes,
-                   usd_packing, usd_frio, usd_total
+                   usd_packing, usd_frio, usd_total, tc
             FROM {schema}.ppto_ingreso_usd
             ORDER BY temporada DESC, actualizado_en DESC
         """)
@@ -114,10 +117,12 @@ def load_ingreso_data() -> dict:
     ingreso_map = {}
     for r in rows:
         key = (r['exportadora'], r['especie'], r['mes'])
+        tc_val = r.get('tc')
         ingreso_map.setdefault(key, {
             'usd_packing': float(r['usd_packing'] or 0),
             'usd_frio':    float(r['usd_frio']    or 0),
             'usd_total':   float(r['usd_total']   or 0),
+            'tc':          float(tc_val) if tc_val is not None else None,
         })
     return ingreso_map
 
@@ -125,15 +130,12 @@ def load_ingreso_data() -> dict:
 def aplicar_ingreso_manual(calc: dict, ingreso_map: dict,
                             exportadora: str, especie: str, mes: int) -> dict:
     """
-    Si existe un ingreso manual para (exportadora, especie, mes),
-    reemplaza los valores USD calculados.
-    Los kgs y kg_export NO cambian (siguen siendo del Excel).
-    El clp_total se recalcula con el usd_total manual × tasa.
+    DEPRECADO — usar acumular_grupos_con_overrides() en presupuesto.py.
+    Mantenido solo para compatibilidad con código externo.
     """
     key = (exportadora, especie, mes)
     if key not in ingreso_map:
-        return calc   # sin override, devuelve el calculo normal
-
+        return calc
     ing = ingreso_map[key]
     tasa = calc['tasa']
     manual = dict(calc)
@@ -143,6 +145,100 @@ def aplicar_ingreso_manual(calc: dict, ingreso_map: dict,
     manual['clp_total']   = ing['usd_total'] * tasa if tasa else 0.0
     manual['es_manual']   = True
     return manual
+
+
+def acumular_grupos(rows, unitarios, exportable, tasas, moneda='CLP') -> dict:
+    """
+    Primera pasada: acumula calculos automaticos por (exportadora, especie, mes).
+    Tambien guarda sub-totales por semana para el agrupamiento semanal.
+
+    Retorna grupos: {(exportadora, especie, mes): group_data}
+    donde group_data tiene:
+      kgs, kg_export, usd_packing, usd_frio, usd_total, clp_total,
+      tasa, es_manual, por_semana: {semana: {...mismas claves sin tasa}}
+    """
+    grupos: dict = {}
+    for row in rows:
+        esp         = row.get('especie')     or 'Sin Especie'
+        exportadora = row.get('exportadora') or 'Sin Exportadora'
+        mes         = row.get('mes')
+        semana      = row.get('semana')
+
+        c    = calcular_fila(row, unitarios, exportable, tasas, moneda)
+        gkey = (exportadora, esp, mes)
+
+        if gkey not in grupos:
+            grupos[gkey] = {
+                'exportadora': exportadora, 'especie': esp, 'mes': mes,
+                'kgs': 0.0, 'kg_export': 0.0,
+                'usd_packing': 0.0, 'usd_frio': 0.0,
+                'usd_total': 0.0, 'clp_total': 0.0,
+                'tasa': None, 'es_manual': False,
+                'por_semana': {},
+            }
+        g = grupos[gkey]
+        g['kgs']        += c['kgs']
+        g['kg_export']  += c['kg_export']
+        g['usd_packing']+= c['usd_packing']
+        g['usd_frio']   += c['usd_frio']
+        g['usd_total']  += c['usd_total']
+        g['clp_total']  += c['clp_total']
+        if c['tasa'] is not None:
+            g['tasa'] = c['tasa']
+
+        if semana is not None:
+            ps = g['por_semana'].setdefault(semana, {
+                'kgs': 0.0, 'kg_export': 0.0,
+                'usd_packing': 0.0, 'usd_frio': 0.0,
+                'usd_total': 0.0, 'clp_total': 0.0,
+            })
+            ps['kgs']        += c['kgs']
+            ps['kg_export']  += c['kg_export']
+            ps['usd_packing']+= c['usd_packing']
+            ps['usd_frio']   += c['usd_frio']
+            ps['usd_total']  += c['usd_total']
+            ps['clp_total']  += c['clp_total']
+
+    return grupos
+
+
+def aplicar_overrides_a_grupos(grupos: dict, ingreso_map: dict) -> None:
+    """
+    Segunda pasada (in-place): si existe ingreso manual para (exportadora, especie, mes),
+    reemplaza los USD del grupo una sola vez.
+    - clp_total = usd_total_manual * tasa del grupo
+    - por_semana: se redistribuye proporcionalmente segun los USD automaticos;
+      si el automatico es 0, se distribuye en partes iguales entre semanas.
+    """
+    for gkey, g in grupos.items():
+        exportadora, esp, mes = gkey
+        if (exportadora, esp, mes) not in ingreso_map:
+            continue
+
+        ing      = ingreso_map[(exportadora, esp, mes)]
+        # TC manual tiene prioridad sobre el calculado automaticamente
+        tasa     = ing['tc'] if ing.get('tc') is not None else (g['tasa'] or 0.0)
+        auto_usd = g['usd_total']
+
+        g['usd_packing'] = ing['usd_packing']
+        g['usd_frio']    = ing['usd_frio']
+        g['usd_total']   = ing['usd_total']
+        g['clp_total']   = ing['usd_total'] * tasa
+        g['es_manual']   = True
+        g['tc_manual']   = ing.get('tc')   # None si no se ingresó
+
+        # Redistribuir por semana
+        if g['por_semana']:
+            n = len(g['por_semana'])
+            for ps in g['por_semana'].values():
+                if auto_usd:
+                    ratio = ps['usd_total'] / auto_usd
+                else:
+                    ratio = 1.0 / n
+                ps['usd_packing'] = ing['usd_packing'] * ratio
+                ps['usd_frio']    = ing['usd_frio']    * ratio
+                ps['usd_total']   = ing['usd_total']   * ratio
+                ps['clp_total']   = ps['usd_total']    * tasa
 
 
 # ── Calculo de tasa ───────────────────────────────────────────────────
@@ -195,14 +291,14 @@ def calcular_fila(row, unitarios, exportable, tasas, moneda='CLP'):
     # Buscar precio por (exportadora, especie); si no hay, usar 0
     u = unitarios.get((exportadora, esp), {})
 
-    pct            = float(exportable.get(esp) or 0)
+    pct            = float(exportable.get((exportadora, esp)) or 0)
     precio_packing = float(u.get('packing') or 0)
     precio_frio    = float(u.get('frio')    or 0)
     tasa           = get_tasa_for_row(tasas, fecha, semana, mes, moneda)
 
     kg_export   = kgs * pct
     usd_packing = kgs       * precio_packing
-    usd_frio    = kg_export * precio_frio
+    usd_frio    = kgs       * precio_frio
     usd_total   = usd_packing + usd_frio
     clp_total   = usd_total * tasa if tasa is not None else 0.0
 

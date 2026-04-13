@@ -46,16 +46,17 @@ class SqlServerAdapter(BaseAdapter):
                 VALUES (?, ?, ?, ?);
         """, especie, packing, frio, now, especie, packing, frio, now)
 
-    def upsert_exportable(self, cur, schema, especie, porcentaje, now):
+    def upsert_exportable(self, cur, schema, exportadora, especie, porcentaje, now):
         cur.execute(f"""
             MERGE {schema}.ppto_exportable_pct AS t
-            USING (SELECT ? AS especie) AS s ON t.especie = s.especie
+            USING (SELECT ? AS exportadora, ? AS especie) AS s
+              ON t.exportadora=s.exportadora AND t.especie=s.especie
             WHEN MATCHED THEN
                 UPDATE SET porcentaje=?, actualizado_en=?
             WHEN NOT MATCHED THEN
-                INSERT (especie, porcentaje, actualizado_en)
-                VALUES (?, ?, ?);
-        """, especie, porcentaje, now, especie, porcentaje, now)
+                INSERT (exportadora, especie, porcentaje, actualizado_en)
+                VALUES (?, ?, ?, ?);
+        """, exportadora, especie, porcentaje, now, exportadora, especie, porcentaje, now)
 
     def ensure_unitario_exists(self, cur, schema, especie, now):
         cur.execute(f"""
@@ -65,12 +66,14 @@ class SqlServerAdapter(BaseAdapter):
                 VALUES (?, 0, 0, ?)
         """, especie, especie, now)
 
-    def ensure_exportable_exists(self, cur, schema, especie, now):
+    def ensure_exportable_exists(self, cur, schema, exportadora, especie, now):
         cur.execute(f"""
-            IF NOT EXISTS (SELECT 1 FROM {schema}.ppto_exportable_pct WHERE especie=?)
-                INSERT INTO {schema}.ppto_exportable_pct (especie, porcentaje, actualizado_en)
-                VALUES (?, 0.8, ?)
-        """, especie, especie, now)
+            IF NOT EXISTS (SELECT 1 FROM {schema}.ppto_exportable_pct
+                           WHERE exportadora=? AND especie=?)
+                INSERT INTO {schema}.ppto_exportable_pct
+                    (exportadora, especie, porcentaje, actualizado_en)
+                VALUES (?, ?, 0.8, ?)
+        """, exportadora, especie, exportadora, especie, now)
 
     # ── Diagnóstico ──────────────────────────────────────────────────
     def test_connection(self) -> tuple[bool, str]:

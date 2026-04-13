@@ -6,7 +6,8 @@ Función principal: build_excel() → BytesIO listo para send_file().
 
 import io
 import xlsxwriter
-from services.calculos import calcular_fila, MESES_ABREV, MESES_NOMBRE, sort_mes_temporada
+from services.calculos import (MESES_ABREV, MESES_NOMBRE, sort_mes_temporada,
+                                acumular_grupos, aplicar_overrides_a_grupos)
 
 
 def build_excel(
@@ -39,6 +40,7 @@ def build_excel(
         'text':    F({'border': 1}),
         'num':     F({'num_format': '#,##0', 'border': 1}),
         'dec':     F({'num_format': '#,##0.00', 'border': 1}),
+        'unit':    F({'num_format': '#,##0.0000', 'border': 1}),
         'pct':     F({'num_format': '0.0%', 'border': 1}),
         'usd_pk':  F({'num_format': '$#,##0.00', 'border': 1, 'bg_color': '#dbeafe'}),
         'usd_fr':  F({'num_format': '$#,##0.00', 'border': 1, 'bg_color': '#e0f2fe'}),
@@ -53,22 +55,22 @@ def build_excel(
     }
 
     # ── Data map: especie → mes → métricas ───────────────────────────
-    data_map: dict = {}
-    from services.calculos import aplicar_ingreso_manual
-    _ing = ingreso_map or {}
+    # Pasada 1: acumular por (exportadora, especie, mes) y aplicar overrides una vez
+    _ing    = ingreso_map or {}
+    grupos  = acumular_grupos(rows, unitarios, exportable, tasas, moneda)
+    aplicar_overrides_a_grupos(grupos, _ing)
 
-    for row in rows:
-        esp         = row.get('especie')     or 'Sin Especie'
-        exportadora = row.get('exportadora') or ''
-        mes         = row.get('mes') or 0
-        c   = calcular_fila(row, unitarios, exportable, tasas, moneda)
-        c   = aplicar_ingreso_manual(c, _ing, exportadora, esp, mes)
+    # Pasada 2: agregar a especie × mes (colapsando exportadoras)
+    data_map: dict = {}
+    for (exportadora, esp, mes), g in grupos.items():
+        esp = esp or 'Sin Especie'
+        mes = mes or 0
         data_map.setdefault(esp, {})
         data_map[esp].setdefault(mes, {'kgs': 0, 'ke': 0, 'upk': 0, 'ufr': 0, 'ut': 0, 'mon': 0})
         m = data_map[esp][mes]
-        m['kgs'] += c['kgs'];  m['ke']  += c['kg_export']
-        m['upk'] += c['usd_packing']; m['ufr'] += c['usd_frio']
-        m['ut']  += c['usd_total'];   m['mon'] += c['clp_total']
+        m['kgs'] += g['kgs'];         m['ke']  += g['kg_export']
+        m['upk'] += g['usd_packing']; m['ufr'] += g['usd_frio']
+        m['ut']  += g['usd_total'];   m['mon'] += g['clp_total']
 
     all_meses = sorted({mes for v in data_map.values() for mes in v}, key=sort_mes_temporada)
     especies  = sorted(data_map.keys())
@@ -160,12 +162,16 @@ def build_excel(
     fmts_ = ([fmt['text']] * 6 +
               [fmt['text'], fmt['num'], fmt['text'], fmt['text'],
                fmt['num'], fmt['pct'], fmt['num'],
-               fmt['dec'], fmt['usd_pk'],
-               fmt['dec'], fmt['usd_fr'],
+               fmt['unit'], fmt['usd_pk'],
+               fmt['unit'], fmt['usd_fr'],
                fmt['usd_tot'], fmt['dec'], fmt['mon']])
 
     for rn, row in enumerate(rows, 1):
         c = calcular_fila(row, unitarios, exportable, tasas, moneda)
+        c = aplicar_ingreso_manual(c, _ing,
+                                   row.get('exportadora') or '',
+                                   row.get('especie')     or '',
+                                   row.get('mes')         or 0)
         vals = [
             row.get('temporada'), row.get('exportadora'),
             row.get('especie'),   row.get('variedad'),

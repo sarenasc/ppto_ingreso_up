@@ -61,12 +61,17 @@ if __name__ == '__main__':
         print(f'\n[ERROR] No se pudo conectar a la BD:\n  {e}')
         print('  -> Verifica .env o usa la pantalla Configuracion BD\n')
 
-    # 2. Migrar unitarios a esquema exportadora+especie
+    # 2. Migrar unitarios y exportable a esquema exportadora+especie
     try:
         from services.ddl import migrar_unitarios_por_exportadora
         migrar_unitarios_por_exportadora(CFG['DB_ENGINE'], CFG['DB_SCHEMA'])
     except Exception as e:
         print(f'[WARN] Migracion unitarios: {e}')
+    try:
+        from services.ddl import migrar_exportable_por_exportadora
+        migrar_exportable_por_exportadora(CFG['DB_ENGINE'], CFG['DB_SCHEMA'])
+    except Exception as e:
+        print(f'[WARN] Migracion exportable: {e}')
 
     # 3. Crear usuario admin por defecto si no hay ninguno
     try:

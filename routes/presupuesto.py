@@ -15,9 +15,10 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify, send_file
 
 from config            import CFG
-from services.calculos import (load_calc_data, calcular_fila, MESES_NOMBRE,
+from services.calculos import (load_calc_data, MESES_NOMBRE,
                                 sort_mes_temporada,
-                                load_ingreso_data, aplicar_ingreso_manual)
+                                load_ingreso_data,
+                                acumular_grupos, aplicar_overrides_a_grupos)
 from services.exportar import build_excel
 from database          import get_db
 from routes.auth       import login_required
@@ -25,64 +26,66 @@ from routes.auth       import login_required
 bp = Blueprint('presupuesto', __name__, url_prefix='/api/ppto')
 
 
-def _get_tasa_from_row(row, tasas, moneda):
-    """Obtiene la tasa para calcular clp cuando hay override manual."""
-    from services.calculos import get_tasa_for_row
-    fecha  = str(row['fecha'])[:10] if row.get('fecha') else None
-    semana = row.get('semana')
-    mes    = row.get('mes')
-    return get_tasa_for_row(tasas, fecha, semana, mes, moneda)
-
-
 @bp.route('/resumen')
 @login_required
 def resumen():
-    agrupar     = request.args.get('agrupar', 'mes')
-    moneda      = (request.args.get('moneda') or 'CLP').strip().upper()
+    agrupar = request.args.get('agrupar', 'mes')
+    moneda  = (request.args.get('moneda') or 'CLP').strip().upper()
 
     rows, tasas, unitarios, exportable = load_calc_data()
-    ingreso_map = load_ingreso_data()   # overrides manuales
+    ingreso_map = load_ingreso_data()
 
+    # Pasada 1: acumular automatico por (exportadora, especie, mes)
+    grupos = acumular_grupos(rows, unitarios, exportable, tasas, moneda)
+    # Pasada 2: aplicar overrides manuales una vez por grupo
+    aplicar_overrides_a_grupos(grupos, ingreso_map)
+
+    # Pasada 3: agregar al nivel pedido (mes / especie / semana)
     resultado: dict = {}
 
-    for row in rows:
-        esp         = row.get('especie')     or 'Sin Especie'
-        exportadora = row.get('exportadora') or 'Sin Exportadora'
-        mes         = row.get('mes')
-        semana      = row.get('semana')
-
-        c = calcular_fila(row, unitarios, exportable, tasas, moneda)
-        c = aplicar_ingreso_manual(c, ingreso_map, exportadora, esp, mes)
-
+    for (exportadora, esp, mes), g in grupos.items():
         if agrupar == 'semana':
-            key = f'Semana {semana}'
-        elif agrupar == 'especie':
-            key = esp
+            # Distribuir cada semana del grupo
+            for semana, ps in g['por_semana'].items():
+                key = f'Semana {semana}'
+                if key not in resultado:
+                    resultado[key] = {
+                        'periodo': key, 'semana': semana,
+                        'kgs_totales': 0, 'kg_export': 0,
+                        'usd_packing': 0, 'usd_frio': 0,
+                        'usd_total': 0, 'clp_total': 0,
+                        'moneda': moneda, 'tasa_usada': g['tasa'],
+                        'tiene_manual': False,
+                    }
+                r = resultado[key]
+                r['kgs_totales'] += ps['kgs']
+                r['kg_export']   += ps['kg_export']
+                r['usd_packing'] += ps['usd_packing']
+                r['usd_frio']    += ps['usd_frio']
+                r['usd_total']   += ps['usd_total']
+                r['clp_total']   += ps['clp_total']
+                if g['es_manual']:
+                    r['tiene_manual'] = True
         else:
-            key = MESES_NOMBRE.get(mes, f'Mes {mes}')
-
-        if key not in resultado:
-            resultado[key] = {
-                'periodo':     key,
-                'kgs_totales': 0,
-                'kg_export':   0,
-                'usd_packing': 0,
-                'usd_frio':    0,
-                'usd_total':   0,
-                'clp_total':   0,
-                'moneda':      moneda,
-                'tasa_usada':  c['tasa'],
-                'tiene_manual': False,
-            }
-        r = resultado[key]
-        r['kgs_totales'] += c['kgs']
-        r['kg_export']   += c['kg_export']
-        r['usd_packing'] += c['usd_packing']
-        r['usd_frio']    += c['usd_frio']
-        r['usd_total']   += c['usd_total']
-        r['clp_total']   += c['clp_total']
-        if c.get('es_manual'):
-            r['tiene_manual'] = True
+            key = esp if agrupar == 'especie' else MESES_NOMBRE.get(mes, f'Mes {mes}')
+            if key not in resultado:
+                resultado[key] = {
+                    'periodo': key,
+                    'kgs_totales': 0, 'kg_export': 0,
+                    'usd_packing': 0, 'usd_frio': 0,
+                    'usd_total': 0, 'clp_total': 0,
+                    'moneda': moneda, 'tasa_usada': g['tasa'],
+                    'tiene_manual': False,
+                }
+            r = resultado[key]
+            r['kgs_totales'] += g['kgs']
+            r['kg_export']   += g['kg_export']
+            r['usd_packing'] += g['usd_packing']
+            r['usd_frio']    += g['usd_frio']
+            r['usd_total']   += g['usd_total']
+            r['clp_total']   += g['clp_total']
+            if g['es_manual']:
+                r['tiene_manual'] = True
 
     return jsonify(list(resultado.values()))
 
@@ -92,39 +95,34 @@ def resumen():
 def arbol():
     """
     Jerarquia Mes -> Exportadora -> Especie con override de ingreso manual.
+    El override se aplica una vez al total de cada grupo (exportadora, especie, mes),
+    no fila a fila.
     """
     moneda = (request.args.get('moneda') or 'CLP').strip().upper()
 
     rows, tasas, unitarios, exportable = load_calc_data()
     ingreso_map = load_ingreso_data()
 
+    # Pasada 1: acumular automatico por grupo
+    grupos = acumular_grupos(rows, unitarios, exportable, tasas, moneda)
+    # Pasada 2: aplicar overrides manuales
+    aplicar_overrides_a_grupos(grupos, ingreso_map)
+
+    # Pasada 3: construir arbol Mes → Exportadora → Especie desde grupos
     tree: dict = {}
-
-    for row in rows:
-        mes         = row.get('mes')         or 0
-        exportadora = row.get('exportadora') or 'Sin Exportadora'
-        esp         = row.get('especie')     or 'Sin Especie'
-
-        c = calcular_fila(row, unitarios, exportable, tasas, moneda)
-        c = aplicar_ingreso_manual(c, ingreso_map, exportadora, esp, mes)
-
+    for (exportadora, esp, mes), g in grupos.items():
+        mes = mes or 0
         tree.setdefault(mes, {})
         tree[mes].setdefault(exportadora, {})
-        tree[mes][exportadora].setdefault(esp, {
-            'kgs': 0, 'kg_export': 0,
-            'usd_packing': 0, 'usd_frio': 0,
-            'usd_total': 0, 'clp_total': 0,
-            'es_manual': False,
-        })
-        d = tree[mes][exportadora][esp]
-        d['kgs']        += c['kgs']
-        d['kg_export']  += c['kg_export']
-        d['usd_packing']+= c['usd_packing']
-        d['usd_frio']   += c['usd_frio']
-        d['usd_total']  += c['usd_total']
-        d['clp_total']  += c['clp_total']
-        if c.get('es_manual'):
-            d['es_manual'] = True
+        tree[mes][exportadora][esp] = {
+            'kgs':        g['kgs'],
+            'kg_export':  g['kg_export'],
+            'usd_packing':g['usd_packing'],
+            'usd_frio':   g['usd_frio'],
+            'usd_total':  g['usd_total'],
+            'clp_total':  g['clp_total'],
+            'es_manual':  g['es_manual'],
+        }
 
     resultado = []
     for mes in sorted(tree.keys(), key=sort_mes_temporada):
@@ -146,10 +144,10 @@ def arbol():
             for esp in sorted(tree[mes][exp].keys()):
                 d = tree[mes][exp][esp]
                 exp_data['especies'].append({'especie': esp, **d})
-                for k in ('kgs','kg_export','usd_packing','usd_frio','usd_total','clp_total'):
+                for k in ('kgs', 'kg_export', 'usd_packing', 'usd_frio', 'usd_total', 'clp_total'):
                     exp_data[k] += d[k]
             mes_data['exportadoras'].append(exp_data)
-            for k in ('kgs','kg_export','usd_packing','usd_frio','usd_total','clp_total'):
+            for k in ('kgs', 'kg_export', 'usd_packing', 'usd_frio', 'usd_total', 'clp_total'):
                 mes_data[k] += exp_data[k]
         resultado.append(mes_data)
 
