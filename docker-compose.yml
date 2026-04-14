@@ -1,0 +1,20 @@
+services:
+  ppto:
+    build: .
+    container_name: ppto_ingreso
+    restart: unless-stopped
+    ports:
+      - "15050:5050"
+    env_file:
+      - .env
+    volumes:
+      # Uploads persisten fuera del contenedor
+      - ppto_uploads:/app/uploads
+    # El contenedor necesita llegar al SQL Server externo
+    # Si está en la red local, extra_hosts no es necesario.
+    # Si el SQL Server corre en la misma máquina host, descomentar:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  ppto_uploads:

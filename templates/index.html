@@ -855,12 +855,26 @@ async function loadVersions() {
   } else { divBtn.style.display='none'; }
   const el = document.getElementById('versions-table');
   if (!data.length) { el.innerHTML='<div class="empty-state"><div class="icon">📜</div>Sin versiones</div>'; return; }
-  el.innerHTML=`<table><thead><tr><th>Versión</th><th>Fecha</th><th>Filas</th><th>Observación</th></tr></thead><tbody>
+  el.innerHTML=`<table><thead><tr><th>Versión</th><th>Fecha</th><th>Filas</th><th>Observación</th><th></th></tr></thead><tbody>
     ${data.map(v=>`<tr><td><span class="badge badge-blue">v${v.numero_version}</span></td>
       <td>${(v.fecha_actualizacion||'').slice(0,16)}</td>
       <td class="num">${fmt(v.filas_cargadas)}</td>
-      <td>${v.observacion||'—'}</td></tr>`).join('')}
+      <td>${v.observacion||'—'}</td>
+      <td><button class="btn btn-outline btn-sm" style="color:#dc2626;border-color:#dc2626;padding:2px 8px;font-size:11px" onclick="deleteVersion(${v.id},${v.numero_version})">🗑 Eliminar</button></td></tr>`).join('')}
   </tbody></table>`;
+}
+
+async function deleteVersion(id, numero) {
+  if (!confirm(`¿Eliminar versión v${numero}?\n\nSi es la versión activa, los datos de estimación también se borrarán.`)) return;
+  const res = await fetch(`/api/estimacion/version/${id}`, {method:'DELETE'}).then(r=>r.json());
+  if (res.ok) {
+    showAlert(`✅ Versión v${numero} eliminada.`);
+    loadVersions();
+    loadTablaEst();
+    loadDashboard();
+  } else {
+    showAlert(`❌ ${res.error||'Error al eliminar'}`, 'danger');
+  }
 }
 
 // ════════════════════════════════════════════════════════

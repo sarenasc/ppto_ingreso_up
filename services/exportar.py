@@ -7,6 +7,7 @@ Función principal: build_excel() → BytesIO listo para send_file().
 import io
 import xlsxwriter
 from services.calculos import (MESES_ABREV, MESES_NOMBRE, sort_mes_temporada,
+                                calcular_fila, aplicar_ingreso_manual,
                                 acumular_grupos, aplicar_overrides_a_grupos)
 
 

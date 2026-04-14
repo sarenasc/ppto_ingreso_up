@@ -160,6 +160,33 @@ def pivot():
 
 
 @login_required
+@bp.route('/version/<int:version_id>', methods=['DELETE'])
+def delete_version(version_id):
+    schema = CFG['DB_SCHEMA']
+    db     = get_db()
+    with db.get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(db.norm(f"""
+            SELECT numero_version FROM {schema}.ppto_version_log WHERE id=?
+        """), (version_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'error': 'Versión no encontrada'}), 404
+        numero_version = row[0]
+
+        cur.execute(f"SELECT MAX(numero_version) FROM {schema}.ppto_version_log")
+        max_ver = cur.fetchone()[0]
+
+        cur.execute(db.norm(f"DELETE FROM {schema}.ppto_version_log WHERE id=?"), (version_id,))
+
+        # Si era la versión activa, limpiar los datos de estimación
+        if numero_version == max_ver:
+            cur.execute(f"DELETE FROM {schema}.ppto_estimacion")
+
+    return jsonify({'ok': True})
+
+
+@login_required
 @bp.route('/download-ultimo')
 def download_ultimo():
     import os

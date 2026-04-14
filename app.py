@@ -81,4 +81,10 @@ if __name__ == '__main__':
 
     # 3. Arrancar
     app = create_app()
-    app.run(debug=True, port=CFG['FLASK_PORT'], host='0.0.0.0')
+    try:
+        from waitress import serve
+        port = int(CFG['FLASK_PORT'])
+        print(f'[OK] Servidor en http://0.0.0.0:{port}')
+        serve(app, host='0.0.0.0', port=port, threads=4)
+    except ImportError:
+        app.run(debug=True, port=CFG['FLASK_PORT'], host='0.0.0.0')
